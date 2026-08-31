@@ -26,3 +26,17 @@ coverage/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Agent skills, prompts and temporary assets
+.agents/
+SKILL.md
+skills-lock.json
+assets/
+config/
+examples/
+references/
+scripts/
+images/
+*.png
+*.jpg
+*.jpeg
