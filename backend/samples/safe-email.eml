@@ -1,0 +1,16 @@
+From: colleague@company.com
+To: demo.user@company.com
+Subject: Meeting notes from today
+Date: Mon, 31 Aug 2026 14:00:00 +0000
+Message-ID: <safe-email-001@company.com>
+Received: from mail.company.com (mail.company.com [203.0.113.50]) by mx.company.com with ESMTP id safe001
+Authentication-Results: mx.company.com; spf=pass smtp.mailfrom=company.com; dkim=pass header.d=company.com; dmarc=pass header.from=company.com
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+Hi team,
+
+Here are the notes from today's standup. Nothing urgent, just tracking action items for next week.
+
+Best,
+Alex

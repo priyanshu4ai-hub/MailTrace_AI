@@ -1,0 +1,28 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Node and build output
+node_modules/
+dist/
+coverage/
+
+# Logs and local runtime state
+*.log
+*.pid
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

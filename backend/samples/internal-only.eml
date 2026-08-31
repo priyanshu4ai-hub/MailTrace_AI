@@ -1,0 +1,13 @@
+From: internal@corp.local
+To: admin@corp.local
+Subject: Internal relay test
+Date: Mon, 31 Aug 2026 09:00:00 +0000
+Message-ID: <internal-001@corp.local>
+Received: from mailserver (mailserver [10.0.0.5]) by gateway.corp.local with ESMTP id int001
+Received: from localhost (localhost [127.0.0.1]) by mailserver.corp.local with ESMTP id int002
+Received: from intranet (intranet [192.168.1.100]) by mailserver.corp.local with ESMTP id int003
+Authentication-Results: gateway.corp.local; spf=pass smtp.mailfrom=corp.local; dkim=pass header.d=corp.local; dmarc=pass header.from=corp.local
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+This is an internal test message routed entirely through private network infrastructure.

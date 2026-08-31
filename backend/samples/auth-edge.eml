@@ -1,0 +1,11 @@
+From: mixed@example.com
+To: user@example.com
+Subject: Auth edge case test
+Date: Mon, 31 Aug 2026 11:00:00 +0000
+Message-ID: <temperror-test-001@example.com>
+Received: from mail.example.com (mail.example.com [198.51.100.10]) by mx.example.com with ESMTP id te001
+Authentication-Results: mx.example.com; spf=temperror smtp.mailfrom=example.com; dkim=softfail header.d=example.com; dmarc=none header.from=example.com
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+This email tests temperror, softfail, and none auth results.

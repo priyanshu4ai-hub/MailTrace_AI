@@ -1,0 +1,21 @@
+From: noreply@google.com
+To: john.doe@example.com
+Subject: Your Google Play purchase receipt - July 2025
+Date: Wed, 23 Jul 2025 10:05:00 +0000
+Message-ID: <CAGzNHmDEMO003.legit@mail.gmail.com>
+MIME-Version: 1.0
+Content-Type: text/html; charset=UTF-8
+Reply-To: noreply@google.com
+Return-Path: <noreply@scoutcamp.bounces.google.com>
+X-Mailer: Google Mail
+X-Originating-IP: 209.85.220.41
+Received: from mail-sor-f41.google.com (209.85.220.41) by
+  mx.example.com with ESMTPS id DEMO003; Wed, 23 Jul 2025 10:05:03 +0000
+Received: from mail-lj1-f182.google.com (209.85.234.182) by
+  mail-sor-f41.google.com with SMTP id DEMO003b; Wed, 23 Jul 2025 10:05:02 +0000
+Authentication-Results: mx.example.com;
+  dkim=pass header.i=@google.com header.s=20230601 header.b=AbCdEfGh;
+  spf=pass (google.com designates 209.85.220.41 as permitted sender) smtp.mailfrom=noreply@scoutcamp.bounces.google.com;
+  dmarc=pass (p=reject) header.from=google.com
+
+<html><body><div><p>Google Play</p><h2>Your purchase receipt</h2><p>Hi John,</p><p>Thank you for your purchase on Google Play. Here is your receipt:</p><table><tr><td>Item</td><td>Minecraft (1 month subscription)</td></tr><tr><td>Order ID</td><td>GPA.DEMO-0000-0000-00001</td></tr><tr><td>Total charged</td><td>EUR 7.99</td></tr></table><p>Thank you,<br/>The Google Play Team</p></div></body></html>

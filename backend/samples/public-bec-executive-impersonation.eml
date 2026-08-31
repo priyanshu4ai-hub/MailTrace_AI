@@ -1,0 +1,45 @@
+From: James Harrison <cfo@acme-corp-secure.net>
+To: finance@acme-corp.com
+Subject: URGENT: Confidential Wire Transfer Required Today
+Date: Mon, 21 Jul 2025 09:15:00 +0000
+Message-ID: <20250721091500.DEMO-BEC-001@acme-corp-secure.net>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Reply-To: j.harrison.approvals@gmail-secure-biz.net
+Return-Path: <bounce@acme-corp-secure.net>
+X-Mailer: Microsoft Outlook 16.0
+X-Originating-IP: 185.220.101.47
+Received: from mail.acme-corp-secure.net (185.220.101.47) by
+  mx.acme-corp.com with SMTP id DEMO001; Mon, 21 Jul 2025 09:15:05 +0000
+Received: from unknown (HELO acme-corp-secure.net) (10.0.0.1)
+  by mail.acme-corp-secure.net with SMTP; Mon, 21 Jul 2025 09:15:00 +0000
+Authentication-Results: mx.acme-corp.com;
+  dkim=fail (no signature found) header.d=acme-corp-secure.net;
+  spf=fail (domain of acme-corp-secure.net does not designate 185.220.101.47 as permitted sender) smtp.mailfrom=bounce@acme-corp-secure.net;
+  dmarc=fail (p=reject) header.from=acme-corp-secure.net
+
+Dear Finance Team,
+
+I need you to process an URGENT and STRICTLY CONFIDENTIAL wire transfer immediately.
+This is extremely time-sensitive and must be completed before end of business today.
+Please do not discuss this request with anyone in the office — legal reasons apply.
+
+We are finalising a confidential acquisition deal that requires an immediate wire transfer.
+If this is not completed TODAY, the entire deal will fall through at a critical juncture.
+
+Please transfer the following amount IMMEDIATELY:
+
+Amount: EUR 48,500.00
+Beneficiary: Acme Holdings Ltd.
+IBAN: GB29 NWBK 6016 1331 9268 19
+BIC/SWIFT: NWBKGB2L
+Reference: CONF-ACQ-2025-07
+
+Once the transfer is completed, send confirmation to: j.harrison@securemail-verify.net
+
+Do not reply to this email. Use only the contact address above.
+
+Best regards,
+James Harrison
+Chief Financial Officer
+ACME Corporation

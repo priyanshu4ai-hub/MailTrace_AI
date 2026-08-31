@@ -1,0 +1,11 @@
+From: Security Team <alerts@account-review.example>
+To: demo.user@example.com
+Subject: Urgent: Verify your mailbox immediately
+Date: Mon, 31 Aug 2026 10:30:00 +0000
+Message-ID: <mailtrace-demo-001@example>
+Received: from localhost (localhost [127.0.0.1]) by mailtrace-demo with ESMTP id demo001
+Authentication-Results: mailtrace-demo; spf=fail smtp.mailfrom=account-review.example; dkim=fail header.d=account-review.example; dmarc=fail header.from=account-review.example
+MIME-Version: 1.0
+Content-Type: text/html; charset="utf-8"
+
+<html><body><p>Your mailbox will be disabled in 30 minutes.</p><p>Open the secure portal to retain access.</p></body></html>
