@@ -1,0 +1,61 @@
+name: 🐛 Bug Report
+description: Report a defect, parsing failure, or unexpected threat assessment in MailTrace AI
+title: "[BUG]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report an issue! Please provide as much detail as possible.
+  - type: input
+    id: version
+    attributes:
+      label: Version / Commit Hash
+      description: What version of MailTrace AI or commit hash are you running?
+      placeholder: "e.g., main branch @ commit 2b8187e"
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected Component
+      options:
+        - Frontend (UI, Attack Graph, Theming)
+        - Backend API (/api/v1/investigate)
+        - EML Parser & MIME Decoder
+        - SPF / DKIM / DMARC Verifier
+        - Threat Engine & Scoring
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the Bug
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Step-by-step reproduction instructions.
+      placeholder: |
+        1. Upload .eml file '...'
+        2. Click on 'Investigation' tab
+        3. See error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: A clear and concise description of what you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs / Console Output
+      description: Paste any server traceback or browser console errors here.
+      render: shell

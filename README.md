@@ -4,15 +4,17 @@
 [![React](https://img.shields.io/badge/React-19.0+-61DAFB?logo=react&logoColor=black)](https://react.dev)
 [![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-3.4+-38B2AC?logo=tailwind-css&logoColor=white)](https://tailwindcss.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![Code of Conduct](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
 
-**MailTrace AI (SIH26106)** is an enterprise-grade Digital Forensics & Incident Response (DFIR) platform for automated email threat triage, header forensics, and infrastructure correlation.
+**MailTrace AI (SIH26106)** is an open-source, enterprise-grade Digital Forensics & Incident Response (DFIR) platform for automated email threat triage, header forensics, and infrastructure correlation.
 
 ---
 
 ## Key Features
 
 - **Interactive Correlated Attack Graph:** Visual topology mapping sender identities, envelope Return-Paths, intermediate relay IPs, authentication results, and AI threat classifications.
-- **Deep RFC 5322 & RFC 5321 Forensic Engine:** Detects envelope spoofing and display name impersonation by comparing 5321.MailFrom against 5322.From.
+- **Deep RFC 5322 & RFC 5321 Forensic Engine:** Detects envelope spoofing and display name impersonation by comparing `5321.MailFrom` against `5322.From`.
 - **Protocol Authentication Audit:** Comprehensive verification of SPF (RFC 7208), DKIM cryptographic RSA signatures (RFC 6376), and DMARC alignment/enforcement policies (RFC 7489).
 - **Automated Threat Intelligence & IOC Workbench:** Extracts and defangs domain lookalikes, suspect relay IPs, URLs, hashes, and aligns observables with the MITRE ATT&CK® Enterprise Matrix.
 - **Microsecond Timeline Trace:** End-to-end execution logging across ingestion, MIME decoding, authentication audits, GeoIP OSINT, and LLM semantic triage.
@@ -79,6 +81,22 @@ You can test with any standard `.eml` or `.txt` email file via the UI, or run ag
 curl -X POST "http://127.0.0.1:8000/api/v1/investigate" \
   -F "file=@backend/samples/phishing-demo.eml"
 ```
+
+---
+
+## Contributing
+
+We love contributions! Whether you're fixing a bug, adding new threat detection heuristics, or improving UI accessibility, please check out our [Contributing Guidelines](CONTRIBUTING.md) to get started.
+
+- [Contributing Guidelines](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Security Policy](SECURITY.md)
+
+---
+
+## License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
 ---
 
