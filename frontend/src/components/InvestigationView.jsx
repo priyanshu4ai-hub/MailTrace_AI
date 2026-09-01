@@ -8,6 +8,7 @@ import { EvidenceTab } from './tabs/EvidenceTab'
 import { IndicatorsTab } from './tabs/IndicatorsTab'
 import { TimelineTab } from './tabs/TimelineTab'
 import { ReportsTab } from './tabs/ReportsTab'
+import { ResponseTab } from './tabs/ResponseTab'
 import { CasesTab } from './tabs/CasesTab'
 
 const API_URL = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '')
@@ -55,6 +56,7 @@ const NAV = [
   { label: 'Evidence', icon: FileIcon },
   { label: 'Indicators', icon: AlertIcon },
   { label: 'Timeline', icon: ClockIcon },
+  { label: 'Response', icon: ShieldIcon },
   { label: 'Reports', icon: DocIcon },
 ]
 
@@ -481,6 +483,14 @@ function InvestigationView() {
                 result={result}
                 t={t}
                 caseId={caseId}
+                activeCase={activeCase}
+              />
+            )}
+
+            {activeTab === 'Response' && (
+              <ResponseTab
+                result={result}
+                activeCase={activeCase}
               />
             )}
           </main>
