@@ -344,4 +344,46 @@ class CampaignListResponse(BaseModel):
     campaigns: list[CampaignListItem] = Field(default_factory=list)
 
 
+# ── Evidence Ledger Schemas ──────────────────────────────────
+
+class LedgerEntryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    case_id: int
+    sequence_number: int
+    entry_type: str
+    reference_id: str = ""
+    data_hash: str
+    previous_hash: str
+    entry_hash: str
+    metadata_json: str = "{}"
+    timestamp: str
+
+
+class LedgerVerificationResponse(BaseModel):
+    case_id: int
+    status: Literal["intact", "tampered", "empty", "not_found"]
+    is_valid: bool
+    total_entries: int
+    verified_entries: int
+    first_break_at: int | None = None
+    break_reason: str | None = None
+    merkle_root: str | None = None
+    latest_entry_hash: str | None = None
+    message: str = ""
+
+
+class LedgerSummaryResponse(BaseModel):
+    case_id: int
+    case_number: str
+    total_entries: int
+    is_valid: bool
+    status: str
+    merkle_root: str
+    latest_entry_hash: str | None = None
+    entries: list[LedgerEntryResponse] = Field(default_factory=list)
+
+
+
 

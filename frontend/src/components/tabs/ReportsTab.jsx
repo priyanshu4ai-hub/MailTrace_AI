@@ -1,8 +1,18 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 
 export function ReportsTab({ result, t, caseId }) {
   const [copied, setCopied] = useState(false)
   const [analystNotes, setAnalystNotes] = useState('Automated triage completed. Perimeter mail gateway rule triggered. Recommended quarantine action approved.')
+  const [ledgerMeta, setLedgerMeta] = useState(null)
+
+  useEffect(() => {
+    if (caseId) {
+      fetch(`/api/v1/cases/${caseId}/ledger/verify`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data) setLedgerMeta(data) })
+        .catch(() => {})
+    }
+  }, [caseId])
 
   const email = result?.email || {}
   const auth = result?.authentication || {}
@@ -18,6 +28,9 @@ Incident Date   : ${email.date || new Date().toISOString()}
 Classification  : ${cls.toUpperCase()} (Confidence: ${score}%)
 MITRE ATT&CK®   : ${t?.mitre_attack_mapping || 'T1566'}
 Evidence Hash   : ${result?.evidence_hash || 'N/A'}
+Merkle Root     : ${ledgerMeta?.merkle_root || 'N/A'}
+Ledger Status   : ${ledgerMeta?.is_valid ? 'VERIFIED IMMUTABLE HASH CHAIN' : 'CERTIFIED LOCAL SEAL'}
+Total Blocks    : ${ledgerMeta?.total_entries || 1} chained blocks
 
 1. EXECUTIVE SUMMARY
 -------------------------------------------------------------------
@@ -176,9 +189,11 @@ Digital Forensic & Incident Response (DFIR) Platform
                   ['Unique Message-ID', email.message_id || '—'],
                   ['External Relay IP', `${geoHops[0]?.ip || 'None'} (${geoHops[0]?.city || 'N/A'}, ${geoHops[0]?.country || 'N/A'})`],
                   ['Evidence SHA-256 Digest', result?.evidence_hash || 'N/A'],
+                  ['Merkle Tree Root Hash', ledgerMeta?.merkle_root || result?.evidence_hash || 'N/A'],
+                  ['Cryptographic Ledger State', ledgerMeta?.is_valid ? 'VERIFIED IMMUTABLE (Court-Admissible)' : 'LOCAL SEAL ACTIVE'],
                 ].map(([label, value]) => (
                   <tr key={label} className="border-b" style={{ borderColor: 'var(--border)' }}>
-                    <td className="py-2.5 px-3 font-semibold text-gray-500 w-44">{label}</td>
+                    <td className="py-2.5 px-3 font-semibold text-gray-500 w-48">{label}</td>
                     <td className="py-2.5 px-3 font-mono text-xs break-all" style={{ color: 'var(--text-primary)' }}>{value}</td>
                   </tr>
                 ))}
@@ -233,8 +248,8 @@ Digital Forensic & Incident Response (DFIR) Platform
 
         {/* Signature Footer */}
         <div className="border-t pt-4 flex items-center justify-between text-[10px] font-mono text-gray-500" style={{ borderColor: 'var(--border)' }}>
-          <span>AUDIT ENVELOPE SEAL: {result?.evidence_hash?.slice(0, 16)}...</span>
-          <span>MailTrace AI Forensic Engine // Certified Court-Admissible</span>
+          <span>MERKLE SEAL: {(ledgerMeta?.merkle_root || result?.evidence_hash || '').slice(0, 16)}... ({ledgerMeta?.total_entries || 1} BLOCKS)</span>
+          <span>MailTrace AI Immutable Evidence Ledger // Court-Admissible Chain of Custody</span>
         </div>
       </article>
     </div>

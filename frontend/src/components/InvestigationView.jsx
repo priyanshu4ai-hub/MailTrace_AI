@@ -456,6 +456,7 @@ function InvestigationView() {
             {activeTab === 'Evidence' && (
               <EvidenceTab
                 result={result}
+                activeCase={activeCase}
               />
             )}
 

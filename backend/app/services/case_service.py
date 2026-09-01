@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import AnalystNote, Campaign, Case, EmailArtifact, InvestigationResult, TimelineEvent
+from app.services import evidence_ledger
 
 
 def generate_case_number(db: Session) -> str:
@@ -59,6 +60,14 @@ def create_case(
         description=f"Case {case.case_number} created with severity '{case.severity}'.",
         event_metadata={"title": case.title, "threat_type": case.threat_type},
     )
+    evidence_ledger.record_ledger_entry(
+        db,
+        case_id=case.id,
+        entry_type="CASE_CREATED",
+        data_or_hash={"case_number": case.case_number, "title": case.title, "severity": case.severity},
+        reference_id=case.case_number,
+        metadata={"title": case.title, "threat_type": case.threat_type},
+    )
     db.refresh(case)
     return case
 
@@ -98,6 +107,14 @@ def update_case(db: Session, case_id: int, updates: dict[str, Any]) -> Case | No
             event_type="CASE_UPDATED",
             description=f"Case updated: {', '.join(changed_fields)}",
             event_metadata=updates,
+        )
+        evidence_ledger.record_ledger_entry(
+            db,
+            case_id=case.id,
+            entry_type="CASE_STATE_CHANGED",
+            data_or_hash=updates,
+            reference_id=case.case_number,
+            metadata={"changed_fields": changed_fields},
         )
         db.refresh(case)
 
@@ -150,6 +167,14 @@ def add_analyst_note(db: Session, case_id: int, note: str) -> AnalystNote:
         event_type="ANALYST_NOTE_ADDED",
         description=f"Analyst note added: {note[:60]}..." if len(note) > 60 else f"Analyst note added: {note}",
     )
+    evidence_ledger.record_ledger_entry(
+        db,
+        case_id=case_id,
+        entry_type="NOTE_ADDED",
+        data_or_hash={"note": note.strip()},
+        reference_id=str(analyst_note.id),
+        metadata={"note_preview": note[:80]},
+    )
 
     return analyst_note
 
@@ -176,7 +201,6 @@ def attach_investigation_to_case(
         sha256_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
     artifact = EmailArtifact(
-
         case_id=case.id,
         filename=filename or email_data.get("message_id") or "uploaded.eml",
         sha256=sha256_hash,
@@ -237,6 +261,24 @@ def attach_investigation_to_case(
             "risk_score": risk_score,
             "risk_level": risk_level,
         },
+    )
+
+    # Cryptographic Ledger Sealing
+    evidence_ledger.record_ledger_entry(
+        db,
+        case_id=case.id,
+        entry_type="ARTIFACT_STORED",
+        data_or_hash=sha256_hash,
+        reference_id=str(artifact.id),
+        metadata={"filename": artifact.filename, "subject": subject, "sender": sender},
+    )
+    evidence_ledger.record_ledger_entry(
+        db,
+        case_id=case.id,
+        entry_type="INVESTIGATION_SEALED",
+        data_or_hash={"risk_score": risk_score, "risk_level": risk_level, "verdict": verdict, "evidence_hash": sha256_hash},
+        reference_id=str(investigation_result.id),
+        metadata={"verdict": verdict, "risk_score": risk_score},
     )
 
     return artifact, investigation_result
@@ -362,6 +404,17 @@ def save_or_update_campaign(
     db.add(new_campaign)
     db.commit()
     db.refresh(new_campaign)
+
+    if case_id:
+        evidence_ledger.record_ledger_entry(
+            db,
+            case_id=case_id,
+            entry_type="CAMPAIGN_DETECTED",
+            data_or_hash={"campaign_id": new_campaign.campaign_id, "name": new_campaign.name, "threat_type": new_campaign.threat_type},
+            reference_id=new_campaign.campaign_id,
+            metadata={"name": new_campaign.name, "confidence": new_campaign.confidence},
+        )
+
     return new_campaign
 
 

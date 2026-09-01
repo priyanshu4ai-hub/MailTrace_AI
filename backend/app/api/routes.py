@@ -27,11 +27,14 @@ from app.models.schemas import (
     CaseResponse,
     CaseUpdate,
     InvestigationResponse,
+    LedgerEntryResponse,
+    LedgerSummaryResponse,
+    LedgerVerificationResponse,
     PhishingScanRequest,
     PhishingScanResponse,
     TimelineSummaryResponse,
 )
-from app.services import case_service
+from app.services import case_service, evidence_ledger
 from app.services.ai_engine import ThreatAnalyzerService
 from app.services.auth_verifier import AuthVerifier
 from app.services.campaign_detector import CampaignDetectionService
@@ -186,6 +189,60 @@ def get_case_timeline(case_id: int, db: Session = Depends(get_db)) -> TimelineSu
             detail=f"Case with ID {case_id} not found.",
         )
     return TimelineSummaryResponse.model_validate(timeline)
+
+
+# ── Evidence Ledger Endpoints ────────────────────────────────
+
+@router.get("/cases/{case_id}/ledger", response_model=LedgerSummaryResponse, tags=["ledger"])
+def get_case_ledger_summary(case_id: int, db: Session = Depends(get_db)) -> LedgerSummaryResponse:
+    """Return all chained blocks in the case's cryptographic Evidence Ledger."""
+    case = case_service.get_case(db, case_id)
+    if not case:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Case with ID {case_id} not found.",
+        )
+
+    verification = evidence_ledger.verify_case_ledger(db, case_id)
+    entries = evidence_ledger.get_case_ledger(db, case_id)
+    serialized_entries = [
+        LedgerEntryResponse(
+            id=e.id,
+            case_id=e.case_id,
+            sequence_number=e.sequence_number,
+            entry_type=e.entry_type,
+            reference_id=e.reference_id,
+            data_hash=e.data_hash,
+            previous_hash=e.previous_hash,
+            entry_hash=e.entry_hash,
+            metadata_json=e.metadata_json,
+            timestamp=e.timestamp.isoformat() if e.timestamp else "",
+        )
+        for e in entries
+    ]
+
+    return LedgerSummaryResponse(
+        case_id=case.id,
+        case_number=case.case_number,
+        total_entries=len(entries),
+        is_valid=verification["is_valid"],
+        status=verification["status"],
+        merkle_root=verification.get("merkle_root") or "0" * 64,
+        latest_entry_hash=verification.get("latest_entry_hash"),
+        entries=serialized_entries,
+    )
+
+
+@router.get("/cases/{case_id}/ledger/verify", response_model=LedgerVerificationResponse, tags=["ledger"])
+def verify_case_ledger_integrity(case_id: int, db: Session = Depends(get_db)) -> LedgerVerificationResponse:
+    """Cryptographically verify the hash chain and Merkle root of the case evidence ledger."""
+    res = evidence_ledger.verify_case_ledger(db, case_id)
+    if res.get("status") == "not_found":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=res.get("message", "Case not found."),
+        )
+    return LedgerVerificationResponse.model_validate(res)
 
 
 # ── Campaign Management Endpoints ────────────────────────────
@@ -536,6 +593,14 @@ async def investigate_email(
                 email_data=email_data,
                 payload=payload,
                 filename=filename,
+            )
+            evidence_ledger.record_ledger_entry(
+                db=db,
+                case_id=case_id,
+                entry_type="EVIDENCE_SUBMITTED",
+                data_or_hash=payload.get("evidence_hash", ""),
+                reference_id=filename or email_data.get("message_id") or "uploaded.eml",
+                metadata={"filename": filename, "subject": email_data.get("subject", ""), "sender": email_data.get("from", "")},
             )
             # Record granular forensic stage events for the timeline
             _record_forensic_stages(

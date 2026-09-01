@@ -42,6 +42,9 @@ class Case(Base):
     campaigns: Mapped[list[Campaign]] = relationship(
         "Campaign", back_populates="case", cascade="all, delete-orphan"
     )
+    ledger_entries: Mapped[list[EvidenceLedger]] = relationship(
+        "EvidenceLedger", back_populates="case", cascade="all, delete-orphan"
+    )
 
 
 class Campaign(Base):
@@ -118,3 +121,21 @@ class TimelineEvent(Base):
     event_metadata: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
 
     case: Mapped[Case] = relationship("Case", back_populates="timeline_events")
+
+
+class EvidenceLedger(Base):
+    __tablename__ = "evidence_ledger"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    case_id: Mapped[int] = mapped_column(Integer, ForeignKey("cases.id", ondelete="CASCADE"), index=True, nullable=False)
+    sequence_number: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    entry_type: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    reference_id: Mapped[str] = mapped_column(String(128), default="", nullable=False)
+    data_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    previous_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    entry_hash: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    metadata_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    case: Mapped[Case] = relationship("Case", back_populates="ledger_entries")
+
