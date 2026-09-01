@@ -7,6 +7,7 @@ import { EvidenceTab } from './tabs/EvidenceTab'
 import { IndicatorsTab } from './tabs/IndicatorsTab'
 import { TimelineTab } from './tabs/TimelineTab'
 import { ReportsTab } from './tabs/ReportsTab'
+import { CasesTab } from './tabs/CasesTab'
 
 const API_URL = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '')
 
@@ -37,6 +38,7 @@ const NODE_COLORS = {
 
 /* ── Navigation Items ──────────────────────────────────────── */
 const NAV = [
+  { label: 'Cases', icon: FolderIcon },
   { label: 'Overview', icon: GridIcon },
   { label: 'Investigation', icon: SearchIcon },
   { label: 'Evidence', icon: FileIcon },
@@ -44,6 +46,7 @@ const NAV = [
   { label: 'Timeline', icon: ClockIcon },
   { label: 'Reports', icon: DocIcon },
 ]
+
 
 /* ══════════════════════════════════════════════════════════════
    SIDEBAR COMPONENT
@@ -261,13 +264,18 @@ function InvestigationView() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [isDemo, setIsDemo] = useState(true)
+  const [activeCase, setActiveCase] = useState(null)
 
-  async function investigate(f) {
+  async function investigate(f, targetCaseId) {
     if (!f) return
     setError(''); setLoading(true); setIsDemo(false)
     try {
       const body = new FormData()
       body.append('file', f)
+      const cId = targetCaseId || activeCase?.id
+      if (cId) {
+        body.append('case_id', cId)
+      }
       const res = await fetch(`${API_URL}/api/v1/investigate`, { method: 'POST', body })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.detail || 'Investigation request failed.')
@@ -292,13 +300,19 @@ function InvestigationView() {
       setIsDemo(true)
       setFile(null)
       setError('')
+      setActiveCase(null)
     }
+  }
+
+  const handleSelectCaseForInvestigation = (c) => {
+    setActiveCase(c)
+    setActiveTab('Overview')
   }
 
   const t = result?.threat_analysis
   const cls = t?.classification ?? 'Unknown'
   const level = (t?.confidence_score >= 80 || cls === 'Phishing' || cls === 'BEC') ? 'High' : t?.confidence_score >= 50 ? 'Medium' : 'Low'
-  const caseId = isDemo ? (DEMO_CASES[demoCaseKey]?.id || 'INC-2026-08491') : `INC-${Date.now().toString(36).toUpperCase()}`
+  const caseId = activeCase ? activeCase.case_number : isDemo ? (DEMO_CASES[demoCaseKey]?.id || 'INC-2026-08491') : `INC-${Date.now().toString(36).toUpperCase()}`
 
   return (
     <ThemeProvider>
@@ -351,6 +365,12 @@ function InvestigationView() {
               </div>
             )}
 
+            {activeTab === 'Cases' && (
+              <CasesTab
+                onSelectCaseForInvestigation={handleSelectCaseForInvestigation}
+              />
+            )}
+
             {isDemo && activeTab === 'Overview' && (
               <div className="flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-medium animate-fade-in border"
                 style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--accent)' }}>
@@ -399,8 +419,10 @@ function InvestigationView() {
               <TimelineTab
                 result={result}
                 t={t}
+                activeCaseId={activeCase?.id ?? null}
               />
             )}
+
 
             {activeTab === 'Reports' && (
               <ReportsTab
@@ -501,7 +523,9 @@ function GraphCanvas({ graph, geoHops, onNodeClick }) {
 }
 
 /* ── Inline SVG Icons ───────────────────────────────────────── */
+function FolderIcon(p) { return <svg {...p} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg> }
 function ShieldIcon(p) { return <svg {...p} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg> }
+
 function GridIcon(p) { return <svg {...p} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg> }
 function SearchIcon(p) { return <svg {...p} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg> }
 function FileIcon(p) { return <svg {...p} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg> }

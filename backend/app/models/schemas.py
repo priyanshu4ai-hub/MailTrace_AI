@@ -106,3 +106,112 @@ class PhishingScanResponse(BaseModel):
     indicators: list[RiskFinding] = Field(default_factory=list)
     summary: str
     recommended_action: str
+
+
+# ── Case Management Schemas ──────────────────────────────────
+
+class CaseCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    description: str = Field(default="", max_length=10000)
+    severity: Literal["low", "medium", "high", "critical"] = "medium"
+    threat_type: str = Field(default="phishing", max_length=64)
+
+
+class CaseUpdate(BaseModel):
+    title: str | None = Field(default=None, max_length=255)
+    description: str | None = Field(default=None, max_length=10000)
+    status: Literal["open", "in_progress", "closed"] | None = None
+    severity: Literal["low", "medium", "high", "critical"] | None = None
+    threat_type: str | None = Field(default=None, max_length=64)
+
+
+class EmailArtifactResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    case_id: int
+    filename: str
+    sha256: str
+    subject: str
+    sender: str
+    recipient: str
+    created_at: str
+
+
+class InvestigationResultResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    case_id: int
+    risk_score: int
+    risk_level: str
+    verdict: str
+    ai_analysis: str
+    created_at: str
+
+
+class AnalystNoteCreate(BaseModel):
+    note: str = Field(min_length=1, max_length=10000)
+
+
+class AnalystNoteResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    case_id: int
+    note: str
+    created_at: str
+
+
+class TimelineEventResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    case_id: int
+    event_type: str
+    description: str
+    timestamp: str
+    event_metadata: str
+
+
+class CaseResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    case_number: str
+    title: str
+    description: str
+    status: str
+    severity: str
+    threat_type: str
+    created_at: str
+    updated_at: str
+    email_artifacts: list[EmailArtifactResponse] = Field(default_factory=list)
+    investigation_results: list[InvestigationResultResponse] = Field(default_factory=list)
+    analyst_notes: list[AnalystNoteResponse] = Field(default_factory=list)
+    timeline_events: list[TimelineEventResponse] = Field(default_factory=list)
+
+
+# ── Timeline Summary Schema ──────────────────────────────────
+
+class TimelineEventDetail(BaseModel):
+    """Single serialised timeline event for the /timeline endpoint."""
+    id: int
+    case_id: int
+    event_type: str
+    description: str
+    timestamp: str
+    event_metadata: str
+
+
+class TimelineSummaryResponse(BaseModel):
+    """Full timeline summary returned by GET /api/v1/cases/{case_id}/timeline."""
+    case_id: int
+    case_number: str
+    total_events: int
+    first_event_at: str | None = None
+    last_event_at: str | None = None
+    total_duration_ms: int | None = None
+    events: list[TimelineEventDetail] = Field(default_factory=list)
+
+

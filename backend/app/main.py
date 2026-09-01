@@ -5,8 +5,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router
+from app.db.base import Base
+from app.db.session import engine
 
 load_dotenv()
+Base.metadata.create_all(bind=engine)
+
+
 
 
 def _cors_origins() -> list[str]:
