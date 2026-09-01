@@ -165,12 +165,13 @@ class TimelineTests(unittest.TestCase):
         event_types_b = [e["event_type"] for e in tl_b["events"]]
         self.assertNotIn("EMAIL_PARSED", event_types_b)
 
-    # ── Test 6: AI fallback → AI_ANALYSIS_SKIPPED ────────────────────
+    # ── Test 6: AI fallback without keywords → AI_ANALYSIS_SKIPPED ────
     def test_ai_fallback_produces_skipped_event(self) -> None:
         """
-        When the threat analyzer uses heuristic fallback (Groq unavailable),
-        the route should record AI_ANALYSIS_SKIPPED instead of AI_ANALYSIS_COMPLETED.
-        We trigger this by patching ThreatAnalyzerService to return a heuristic explanation.
+        When ThreatAnalyzerService uses deterministic fallback (e.g., Groq disabled/failed),
+        ai_used=False is structurally returned.
+        Even if the explanation does NOT contain 'heuristic' or 'fallback',
+        the route MUST record AI_ANALYSIS_SKIPPED (never AI_ANALYSIS_COMPLETED).
         """
         from unittest.mock import AsyncMock, patch
 
@@ -181,9 +182,10 @@ class TimelineTests(unittest.TestCase):
             "mitre_attack_mapping": "T1566",
             "social_engineering_techniques": [],
             "suspicious_indicators": ["Suspicious URL"],
-            "explanation": "Heuristic fallback: Groq API unavailable.",
+            "explanation": "Standard security assessment completed. Malicious link detected.",
             "recommended_action": "Block sender.",
             "deterministic_assessment": None,
+            "ai_used": False,
         }
 
         case_id = self.client.post(
@@ -206,9 +208,64 @@ class TimelineTests(unittest.TestCase):
         self.assertIn("AI_ANALYSIS_SKIPPED", event_types)
         self.assertNotIn("AI_ANALYSIS_COMPLETED", event_types)
 
-    # ── Test 7: No geo hops → GEOINT_UNAVAILABLE ─────────────────────
+    # ── Test 6b: Successful LLM execution → AI_ANALYSIS_COMPLETED ────
+    def test_ai_success_produces_completed_event(self) -> None:
+        """
+        When LLM successfully analyzes email, ai_used=True is returned and
+        AI_ANALYSIS_COMPLETED is recorded.
+        """
+        from unittest.mock import AsyncMock, patch
+
+        ai_success_analysis = {
+            "classification": "Phishing",
+            "confidence_score": 95,
+            "risk_level": "critical",
+            "mitre_attack_mapping": "T1566.002",
+            "social_engineering_techniques": ["Urgency"],
+            "suspicious_indicators": ["Credential harvester"],
+            "explanation": "LLM identified high-confidence phishing lure targeting corporate SSO.",
+            "recommended_action": "Isolate user workstation and rotate credentials.",
+            "deterministic_assessment": None,
+            "ai_used": True,
+        }
+
+        case_id = self.client.post(
+            "/api/v1/cases", json={"title": "AI Success Test"}
+        ).json()["id"]
+
+        with patch(
+            "app.services.ai_engine.ThreatAnalyzerService.analyze",
+            new_callable=AsyncMock,
+            return_value=ai_success_analysis,
+        ):
+            self.client.post(
+                "/api/v1/investigate",
+                data={"case_id": case_id},
+                files={"file": ("test.eml", SAMPLE_EML_PHISHING.encode(), "message/rfc822")},
+            )
+
+        tl = self.client.get(f"/api/v1/cases/{case_id}/timeline").json()
+        event_types = [e["event_type"] for e in tl["events"]]
+        self.assertIn("AI_ANALYSIS_COMPLETED", event_types)
+        self.assertNotIn("AI_ANALYSIS_SKIPPED", event_types)
+
+    # ── Test 6c: ThreatAnalyzerService fallback returns ai_used=False ─
+    def test_threat_analyzer_service_fallback_structure(self) -> None:
+        """Verify ThreatAnalyzerService returns ai_used=False when LLM is disabled or unconfigured."""
+        import asyncio
+        from app.services.ai_engine import ThreatAnalyzerService
+
+        service = ThreatAnalyzerService()
+        # Default test environment has LLM disabled
+        res = asyncio.run(service.analyze(
+            email_data={"subject": "Test", "body": "Test", "urls": [], "from": "a@b.com"},
+            authentication={"spf": "fail", "dkim": "fail", "dmarc": "fail"},
+        ))
+        self.assertFalse(res.get("ai_used"))
+
+    # ── Test 7: No geo hops (disabled/empty) → GEOINT_UNAVAILABLE ───
     def test_no_geo_hops_produces_unavailable_event(self) -> None:
-        """When GeoIP returns empty list, GEOINT_UNAVAILABLE should be recorded."""
+        """When GeoIP returns empty list (e.g. disabled or no public IPs), GEOINT_UNAVAILABLE is recorded."""
         from unittest.mock import AsyncMock, patch
 
         case_id = self.client.post(
@@ -218,7 +275,7 @@ class TimelineTests(unittest.TestCase):
         with patch(
             "app.services.geo_osint.GeoTrackerService.track_hops",
             new_callable=AsyncMock,
-            return_value=[],  # Empty hops simulates GeoIP unavailable
+            return_value=[],
         ):
             self.client.post(
                 "/api/v1/investigate",
@@ -230,6 +287,96 @@ class TimelineTests(unittest.TestCase):
         event_types = [e["event_type"] for e in tl["events"]]
         self.assertIn("GEOINT_UNAVAILABLE", event_types)
         self.assertNotIn("GEOINT_COMPLETED", event_types)
+
+    # ── Test 7b: All GeoIP HTTP requests fail → GEOINT_UNAVAILABLE ──
+    def test_geoint_all_http_failures_produce_unavailable_event(self) -> None:
+        """When all GeoIP requests fail (e.g. timeout or API error), no fake hops are returned, emitting GEOINT_UNAVAILABLE."""
+        from unittest.mock import AsyncMock, patch
+        import asyncio
+        from app.services.geo_osint import GeoTrackerService
+
+        service = GeoTrackerService()
+        # Mock _lookup_ip returning None (HTTP failure)
+        with patch.object(service, "_is_enabled", return_value=True), \
+             patch.object(service, "_lookup_ip", new_callable=AsyncMock, return_value=None):
+            hops = asyncio.run(service.track_hops(["Received: from mail.evil.com (198.51.100.1) by mx.target.com"]))
+            self.assertEqual(hops, [])
+
+        case_id = self.client.post(
+            "/api/v1/cases", json={"title": "GeoIP Failure Test"}
+        ).json()["id"]
+
+        with patch(
+            "app.services.geo_osint.GeoTrackerService.track_hops",
+            new_callable=AsyncMock,
+            return_value=[],
+        ):
+            self.client.post(
+                "/api/v1/investigate",
+                data={"case_id": case_id},
+                files={"file": ("test.eml", SAMPLE_EML_PHISHING.encode(), "message/rfc822")},
+            )
+
+        tl = self.client.get(f"/api/v1/cases/{case_id}/timeline").json()
+        event_types = [e["event_type"] for e in tl["events"]]
+        self.assertIn("GEOINT_UNAVAILABLE", event_types)
+        self.assertNotIn("GEOINT_COMPLETED", event_types)
+
+    # ── Test 7c: Successful GeoIP request → GEOINT_COMPLETED ────────
+    def test_geoint_successful_request_produces_completed_event(self) -> None:
+        """When GeoIP succeeds, real hop is returned and GEOINT_COMPLETED is recorded."""
+        from unittest.mock import AsyncMock, patch
+
+        successful_hops = [{
+            "ip": "198.51.100.1",
+            "country": "Germany",
+            "city": "Frankfurt",
+            "isp": "Hetzner Online GmbH",
+            "asn": "AS24940",
+        }]
+
+        case_id = self.client.post(
+            "/api/v1/cases", json={"title": "GeoIP Success Test"}
+        ).json()["id"]
+
+        with patch(
+            "app.services.geo_osint.GeoTrackerService.track_hops",
+            new_callable=AsyncMock,
+            return_value=successful_hops,
+        ):
+            self.client.post(
+                "/api/v1/investigate",
+                data={"case_id": case_id},
+                files={"file": ("test.eml", SAMPLE_EML_PHISHING.encode(), "message/rfc822")},
+            )
+
+        tl = self.client.get(f"/api/v1/cases/{case_id}/timeline").json()
+        event_types = [e["event_type"] for e in tl["events"]]
+        self.assertIn("GEOINT_COMPLETED", event_types)
+        self.assertNotIn("GEOINT_UNAVAILABLE", event_types)
+
+    # ── Test 7d: Partial GeoIP success → only valid hops returned ────
+    def test_geoint_partial_success_filters_failed_hops(self) -> None:
+        """When one IP succeeds and another fails, only the successful hop is returned."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+        from app.services.geo_osint import GeoTrackerService
+
+        service = GeoTrackerService()
+        async def mock_lookup(client, ip):
+            if ip == "8.8.8.8":
+                return {"ip": ip, "country": "United States", "city": "Ashburn", "isp": "Google", "asn": "AS15169"}
+            return None  # Failed lookup
+
+        with patch.object(service, "_is_enabled", return_value=True), \
+             patch.object(service, "_lookup_ip", side_effect=mock_lookup):
+            hops = asyncio.run(service.track_hops([
+                "Received: from relay1 (8.8.8.8) by mx.target.com",
+                "Received: from relay2 (1.1.1.1) by relay1",
+            ]))
+            self.assertEqual(len(hops), 1)
+            self.assertEqual(hops[0]["ip"], "8.8.8.8")
+            self.assertEqual(hops[0]["country"], "United States")
 
     # ── Test 8: Timeline persists to file database ────────────────────
     def test_timeline_persists_to_database(self) -> None:

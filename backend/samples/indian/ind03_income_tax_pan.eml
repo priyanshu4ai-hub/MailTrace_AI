@@ -1,0 +1,27 @@
+From: "Income Tax Department — e-Filing Portal" <refund-noreply@incometax-efiling-alert.example>
+To: taxpayer@corp-india.example
+Subject: Important: PAN verification required to prevent account restriction
+Date: Mon, 01 Sep 2026 10:30:00 +0530
+Message-ID: <ind03-20260901-itd@incometax-efiling-alert.example>
+MIME-Version: 1.0
+Content-Type: text/html; charset=UTF-8
+Received: from mail.incometax-efiling-alert.example (smtp-out.offshore-mail.net [185.220.101.99]) by mx.corp-india.example with ESMTP id IND03; Mon, 01 Sep 2026 10:30:04 +0530
+Authentication-Results: mx.corp-india.example;
+  spf=fail (domain of incometax-efiling-alert.example does not designate 185.220.101.99 as permitted sender) smtp.mailfrom=bounce@incometax-efiling-alert.example;
+  dkim=none;
+  dmarc=fail (p=reject) header.from=incometax-efiling-alert.example
+
+<!DOCTYPE html>
+<html>
+<body>
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+  <h2>Income Tax Department — Government of India</h2>
+  <p>Dear Taxpayer,</p>
+  <p>A pending income tax refund of ₹24,850 for Assessment Year 2025-26 has been flagged due to unverified PAN-Aadhaar linkage.</p>
+  <p style="color: #c2410c; font-weight: bold;">Important: You must complete immediate PAN verification to prevent bank account restriction and forfeiture of your refund.</p>
+  <p>Click below to verify your PAN, Aadhaar, and refund bank account credentials on the e-filing portal:</p>
+  <p><a href="https://incometax-efiling-alert.example/efiling/pan/verify?ack=ITR-2026-88319">https://incometax-efiling-alert.example/efiling/pan/verify</a></p>
+  <p>This is a system-generated alert from the e-Filing Administration.</p>
+</div>
+</body>
+</html>

@@ -39,6 +39,31 @@ class Case(Base):
     timeline_events: Mapped[list[TimelineEvent]] = relationship(
         "TimelineEvent", back_populates="case", cascade="all, delete-orphan"
     )
+    campaigns: Mapped[list[Campaign]] = relationship(
+        "Campaign", back_populates="case", cascade="all, delete-orphan"
+    )
+
+
+class Campaign(Base):
+    __tablename__ = "campaigns"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    case_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("cases.id", ondelete="CASCADE"), nullable=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="detected", nullable=False)
+    threat_type: Mapped[str] = mapped_column(String(64), default="Unknown", nullable=False)
+    confidence: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    email_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    shared_ioc_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    shared_infrastructure_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    data: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
+    )
+
+    case: Mapped[Case | None] = relationship("Case", back_populates="campaigns")
 
 
 class EmailArtifact(Base):

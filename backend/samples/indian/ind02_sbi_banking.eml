@@ -1,0 +1,28 @@
+From: "State Bank of India - Online Banking" <noreply@sbi-netbanking-alert.example>
+To: account.holder@corp-india.example
+Subject: Immediate Action Required: SBI Net Banking session expired
+Date: Mon, 01 Sep 2026 10:00:00 +0530
+Message-ID: <ind02-20260901-sbi@sbi-netbanking-alert.example>
+MIME-Version: 1.0
+Content-Type: text/html; charset=UTF-8
+Received: from mail.sbi-netbanking-alert.example (vps-nl.cloudhost.net [185.220.101.99]) by mx.corp-india.example with ESMTP id IND02; Mon, 01 Sep 2026 10:00:05 +0530
+Authentication-Results: mx.corp-india.example;
+  spf=fail (domain of sbi-netbanking-alert.example does not designate 185.220.101.99 as permitted sender) smtp.mailfrom=alert@sbi-netbanking-alert.example;
+  dkim=none;
+  dmarc=fail (p=reject) header.from=sbi-netbanking-alert.example
+
+<!DOCTYPE html>
+<html>
+<body>
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+  <h2>State Bank of India — Internet Banking Alert</h2>
+  <p>Dear SBI Customer,</p>
+  <p>Your SBI Net Banking access session has expired due to pending profile and mandatory security questions update.</p>
+  <p style="color: #b91c1c; font-weight: bold;">Immediate Action Required: Failure to verify your profile within 12 hours will result in temporary suspension of Internet Banking and NEFT/IMPS transfer privileges.</p>
+  <p>To verify and restore immediate access, login securely through our online verification portal:</p>
+  <p><a href="https://sbi-netbanking-alert.example/login/verify?ref=SBI-99182">https://sbi-netbanking-alert.example/login/verify</a></p>
+  <p>Please have your username, password, and OTP ready for verification.</p>
+  <p>Warm regards,<br>SBI Customer Security Team<br>State Bank of India</p>
+</div>
+</body>
+</html>

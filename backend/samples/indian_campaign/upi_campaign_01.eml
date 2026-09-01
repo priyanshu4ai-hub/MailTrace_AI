@@ -1,0 +1,18 @@
+From: "PhonePe UPI Desk" <kyc-notice@upi-kyc-verify.example>
+To: user1@targetcorp.example
+Subject: URGENT: PhonePe UPI KYC Suspension Notice
+Date: Mon, 01 Sep 2026 09:00:00 +0530
+Message-ID: <upi-camp-01@upi-kyc-verify.example>
+MIME-Version: 1.0
+Content-Type: text/html; charset=UTF-8
+Received: from mail.upi-kyc-verify.example (relay01.host.net [185.220.101.99]) by mx.targetcorp.example with ESMTP id UC01; Mon, 01 Sep 2026 09:00:05 +0530
+Authentication-Results: mx.targetcorp.example;
+  spf=fail smtp.mailfrom=bounce@upi-kyc-verify.example;
+  dkim=none;
+  dmarc=fail header.from=upi-kyc-verify.example
+
+<!DOCTYPE html>
+<html><body>
+<p>Dear Customer, your PhonePe UPI service will be deactivated in 24 hours.</p>
+<p>Complete your mandatory KYC immediately: <a href="https://upi-kyc-verify.example/auth/kyc">https://upi-kyc-verify.example/auth/kyc</a></p>
+</body></html>

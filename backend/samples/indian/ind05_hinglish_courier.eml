@@ -1,0 +1,27 @@
+From: "Amazon India Shipping Updates" <delivery@amazon-india-shipping.example>
+To: customer@corp-india.example
+Subject: Your delivery is on hold — ₹89 verification required
+Date: Mon, 01 Sep 2026 11:30:00 +0530
+Message-ID: <ind05-20260901-courier@amazon-india-shipping.example>
+MIME-Version: 1.0
+Content-Type: text/html; charset=UTF-8
+Received: from mail.amazon-india-shipping.example (nl-relay.vps.net [185.220.101.99]) by mx.corp-india.example with ESMTP id IND05; Mon, 01 Sep 2026 11:30:04 +0530
+Authentication-Results: mx.corp-india.example;
+  spf=fail (domain of amazon-india-shipping.example does not designate 185.220.101.99 as permitted sender) smtp.mailfrom=bounce@amazon-india-shipping.example;
+  dkim=none;
+  dmarc=fail (p=reject) header.from=amazon-india-shipping.example
+
+<!DOCTYPE html>
+<html>
+<body>
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+  <h2>Amazon India Logistics — Delivery Notice</h2>
+  <p>Dear Customer, Aapka order hold hai. Abhi verify karein.</p>
+  <p>Your recent parcel #IN-889102 cannot be dispatched due to an incomplete delivery address and an unpaid customs handling fee of <strong>₹89</strong>.</p>
+  <p style="color: #ea580c; font-weight: bold;">Immediate Action: If unpaid within 24 hours, package will be returned to merchant warehouse.</p>
+  <p>Click here to verify address and pay ₹89 customs release fee:</p>
+  <p><a href="https://amazon-india-shipping.example/track/release?tracking=IN-889102">https://amazon-india-shipping.example/track/release</a></p>
+  <p>Thank you,<br>Amazon India Customer Fulfillment</p>
+</div>
+</body>
+</html>

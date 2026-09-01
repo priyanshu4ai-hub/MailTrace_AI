@@ -1,0 +1,27 @@
+From: "EPFO Member Support Helpdesk" <epfo-helpdesk@epfo-member-portal.example>
+To: employee@corp-india.example
+Subject: URGENT: Your UAN account requires verification
+Date: Mon, 01 Sep 2026 11:00:00 +0530
+Message-ID: <ind04-20260901-epfo@epfo-member-portal.example>
+MIME-Version: 1.0
+Content-Type: text/html; charset=UTF-8
+Received: from mail.epfo-member-portal.example (vps-host.cloud.net [185.220.101.99]) by mx.corp-india.example with ESMTP id IND04; Mon, 01 Sep 2026 11:00:05 +0530
+Authentication-Results: mx.corp-india.example;
+  spf=fail (domain of epfo-member-portal.example does not designate 185.220.101.99 as permitted sender) smtp.mailfrom=bounce@epfo-member-portal.example;
+  dkim=none;
+  dmarc=fail (p=reject) header.from=epfo-member-portal.example
+
+<!DOCTYPE html>
+<html>
+<body>
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+  <h2>Employees' Provident Fund Organisation (EPFO)</h2>
+  <p>Dear Member,</p>
+  <p>Your Universal Account Number (UAN) passbook and monthly PF contribution access has been placed on temporary hold due to unverified member KYC details.</p>
+  <p style="color: red; font-weight: bold;">URGENT: Submit member profile verification within 24 hours to prevent complete suspension of PF transfer and withdrawal claims.</p>
+  <p>Verify your UAN credentials and linked Aadhaar/bank account through the member portal:</p>
+  <p><a href="https://epfo-member-portal.example/uan/auth/verify?uan=100998877665">https://epfo-member-portal.example/uan/auth/verify</a></p>
+  <p>Ministry of Labour and Employment, Government of India</p>
+</div>
+</body>
+</html>

@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import AnalystNote, Case, EmailArtifact, InvestigationResult, TimelineEvent
+from app.db.models import AnalystNote, Campaign, Case, EmailArtifact, InvestigationResult, TimelineEvent
 
 
 def generate_case_number(db: Session) -> str:
@@ -308,4 +308,78 @@ def record_investigation_timeline_events(
             description=stage["description"],
             event_metadata=stage.get("metadata", {}),
         )
+
+
+def save_or_update_campaign(
+    db: Session,
+    campaign_data: dict[str, Any],
+    case_id: int | None = None,
+) -> Campaign:
+    """Persists or updates a campaign in the database."""
+    camp_id_str = campaign_data.get("campaign_id") or "MT-CAMP-UNKNOWN"
+    stmt = select(Campaign).where(Campaign.campaign_id == camp_id_str)
+    existing = db.scalars(stmt).first()
+
+    raw_json = json.dumps(campaign_data, ensure_ascii=False)
+    name = campaign_data.get("name", "Correlated Threat Campaign")
+    status_val = campaign_data.get("status", "detected")
+    threat_type = campaign_data.get("threat_type", "Unknown")
+    confidence = campaign_data.get("confidence", 0)
+    email_count = campaign_data.get("email_count", len(campaign_data.get("emails", [])))
+    shared_ioc_count = campaign_data.get("shared_ioc_count", len(campaign_data.get("shared_indicators", [])))
+    shared_infra_count = campaign_data.get("shared_infrastructure_count", 0)
+
+    if existing:
+        existing.name = name
+        existing.status = status_val
+        existing.threat_type = threat_type
+        existing.confidence = confidence
+        existing.email_count = email_count
+        existing.shared_ioc_count = shared_ioc_count
+        existing.shared_infrastructure_count = shared_infra_count
+        existing.data = raw_json
+        existing.updated_at = datetime.now(timezone.utc)
+        if case_id and not existing.case_id:
+            existing.case_id = case_id
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    new_campaign = Campaign(
+        campaign_id=camp_id_str,
+        case_id=case_id,
+        name=name,
+        status=status_val,
+        threat_type=threat_type,
+        confidence=confidence,
+        email_count=email_count,
+        shared_ioc_count=shared_ioc_count,
+        shared_infrastructure_count=shared_infra_count,
+        data=raw_json,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    db.add(new_campaign)
+    db.commit()
+    db.refresh(new_campaign)
+    return new_campaign
+
+
+def get_campaigns(db: Session, case_id: int | None = None) -> list[Campaign]:
+    """Returns campaigns, optionally filtered by case_id."""
+    stmt = select(Campaign)
+    if case_id is not None:
+        stmt = stmt.where(Campaign.case_id == case_id)
+    stmt = stmt.order_by(Campaign.created_at.desc())
+    return list(db.scalars(stmt).all())
+
+
+def get_campaign(db: Session, identifier: str | int) -> Campaign | None:
+    """Retrieves a campaign by its integer ID or unique campaign_id string."""
+    if isinstance(identifier, int) or (isinstance(identifier, str) and identifier.isdigit()):
+        camp = db.get(Campaign, int(identifier))
+        if camp:
+            return camp
+    stmt = select(Campaign).where(Campaign.campaign_id == str(identifier))
+    return db.scalars(stmt).first()
 

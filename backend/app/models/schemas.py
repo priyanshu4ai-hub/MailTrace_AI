@@ -35,7 +35,14 @@ class GeoHop(BaseModel):
     asn: str = "Unknown"
 
 
+class AttackTechnique(BaseModel):
+    id: str = "T1566"
+    name: str = "Phishing"
+    reason: str = ""
+
+
 class ThreatAnalysis(BaseModel):
+    # Existing backwards-compatible fields
     classification: str = "Safe"
     confidence_score: int = Field(default=0, ge=0, le=100)
     mitre_attack_mapping: str = "T1566"
@@ -45,11 +52,38 @@ class ThreatAnalysis(BaseModel):
     recommended_action: str = "Review the message before taking action."
     risk_level: str = "safe"
     deterministic_assessment: PhishingScanResponse | None = None
+    ai_used: bool = False
+
+    # Case 3 Structured AI Investigation Panel fields
+    threat_type: str = "Unknown"
+    confidence: int = Field(default=0, ge=0, le=100)
+    summary: str = ""
+    reasons: list[str] = Field(default_factory=list)
+    attack_techniques: list[AttackTechnique] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
+    analyst_conclusion: str = ""
 
 
 class AttackGraph(BaseModel):
     nodes: list[dict[str, Any]] = Field(default_factory=list)
     links: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ThreatIntelResult(BaseModel):
+    indicator: str
+    type: Literal["url", "domain", "ip", "email", "message_id"]
+    status: Literal["malicious", "suspicious", "benign", "unknown", "unavailable"] = "unknown"
+    confidence: int = Field(default=0, ge=0, le=100)
+    source: str = "Local Analysis"
+    first_seen: str | None = None
+    last_seen: str | None = None
+    reputation: str | None = None
+    country: str | None = None
+    asn: str | None = None
+    isp: str | None = None
+    categories: list[str] = Field(default_factory=list)
+    reasons: list[str] = Field(default_factory=list)
+    checked_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class InvestigationResponse(BaseModel):
@@ -59,6 +93,7 @@ class InvestigationResponse(BaseModel):
     threat_analysis: ThreatAnalysis
     attack_graph: AttackGraph
     evidence_hash: str
+    threat_intelligence: list[ThreatIntelResult] = Field(default_factory=list)
 
 
 class RiskFinding(BaseModel):
@@ -213,5 +248,100 @@ class TimelineSummaryResponse(BaseModel):
     last_event_at: str | None = None
     total_duration_ms: int | None = None
     events: list[TimelineEventDetail] = Field(default_factory=list)
+
+
+# ── Campaign Detection Schemas ───────────────────────────────
+
+class CampaignEmailMember(BaseModel):
+    artifact_id: int
+    case_id: int | None = None
+    subject: str = ""
+    sender: str = ""
+    recipient: str = ""
+    date: str = ""
+    risk_score: int = 0
+    threat_type: str = "Unknown"
+    related_ioc_count: int = 0
+
+
+class SharedIndicator(BaseModel):
+    indicator: str
+    type: Literal["url", "domain", "ip", "sender_domain", "reply_to", "asn"]
+    emails_count: int
+    emails_seen: list[int] = Field(default_factory=list)
+    status: Literal["malicious", "suspicious", "benign", "unknown", "unavailable"] = "unknown"
+    confidence: int = Field(default=0, ge=0, le=100)
+    source: str = "Threat Intelligence"
+    reasons: list[str] = Field(default_factory=list)
+
+
+class CorrelationSignal(BaseModel):
+    signal: str
+    weight: int
+    detail: str
+
+
+class CorrelationPair(BaseModel):
+    source_email_id: int
+    target_email_id: int
+    score: int = Field(ge=0, le=100)
+    signals: list[CorrelationSignal] = Field(default_factory=list)
+    reasons: list[str] = Field(default_factory=list)
+
+
+class CampaignProfile(BaseModel):
+    id: int | None = None
+    campaign_id: str
+    case_id: int | None = None
+    name: str
+    status: str = "detected"
+    confidence: int = Field(default=0, ge=0, le=100)
+    threat_type: str = "Credential Phishing"
+    email_count: int = 0
+    shared_ioc_count: int = 0
+    shared_infrastructure_count: int = 0
+    emails: list[CampaignEmailMember] = Field(default_factory=list)
+    shared_indicators: list[SharedIndicator] = Field(default_factory=list)
+    correlations: list[CorrelationPair] = Field(default_factory=list)
+    reasons: list[str] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
+    ai_summary: str = ""
+    attack_graph: AttackGraph = Field(default_factory=AttackGraph)
+    created_at: str = ""
+    updated_at: str = ""
+
+
+class CampaignDetectionResponse(BaseModel):
+    status: Literal["completed", "insufficient_data", "no_campaigns_detected"]
+    emails_analyzed: int = 0
+    campaigns_detected: int = 0
+    high_confidence_campaigns: int = 0
+    shared_iocs: int = 0
+    campaigns: list[CampaignProfile] = Field(default_factory=list)
+    message: str = ""
+
+
+class CampaignListItem(BaseModel):
+    id: int
+    campaign_id: str
+    case_id: int | None = None
+    name: str
+    status: str
+    threat_type: str
+    confidence: int
+    email_count: int
+    shared_ioc_count: int
+    shared_infrastructure_count: int
+    created_at: str
+    updated_at: str
+
+
+class CampaignListResponse(BaseModel):
+    total_campaigns: int
+    high_confidence_count: int
+    total_emails_correlated: int
+    total_shared_iocs: int
+    campaigns: list[CampaignListItem] = Field(default_factory=list)
+
 
 

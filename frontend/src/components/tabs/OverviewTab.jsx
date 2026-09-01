@@ -1,4 +1,5 @@
 import React from 'react'
+import { AIInvestigationPanel } from '../AIInvestigationPanel'
 
 export function OverviewTab({ result, t, cls, GraphCanvas, onSwitchTab }) {
   const score = t?.confidence_score ?? 0
@@ -59,77 +60,13 @@ export function OverviewTab({ result, t, cls, GraphCanvas, onSwitchTab }) {
           </div>
         </section>
 
-        {/* Threat Assessment Card */}
-        <section className="xl:col-span-4 rounded-xl overflow-hidden flex flex-col p-4 space-y-5"
-          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-          <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: 'var(--border)' }}>
-            <h2 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Threat Assessment</h2>
-            <span className="text-[10px] px-2 py-0.5 rounded font-mono font-bold"
-              style={{ color: scoreColor, background: isHigh ? 'var(--danger-muted)' : isMed ? 'var(--warning-muted)' : 'var(--success-muted)' }}>
-              {isHigh ? 'CRITICAL INCIDENT' : isMed ? 'SUSPICIOUS' : 'VERIFIED CLEAN'}
-            </span>
-          </div>
-
-          {/* Score gauge + verdict */}
-          <div className="flex items-center gap-6">
-            <div className="relative w-20 h-20 flex-shrink-0">
-              <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
-                <circle cx="18" cy="18" r="15.5" fill="none" stroke="var(--border)" strokeWidth="2.5" />
-                <circle cx="18" cy="18" r="15.5" fill="none" stroke={scoreColor} strokeWidth="2.5"
-                  strokeDasharray={`${score} ${100 - score}`} strokeLinecap="round"
-                  style={{ transition: 'stroke-dasharray 0.6s ease' }} />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-lg font-bold" style={{ color: scoreColor }}>{score}</span>
-                <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>/100</span>
-              </div>
-            </div>
-            <div>
-              <p className={`text-lg font-bold ${isHigh ? 'text-red-500' : isMed ? 'text-amber-500' : 'text-emerald-500'}`}>
-                {isHigh ? 'High Risk Threat' : isMed ? 'Medium Risk' : 'Low Risk'} ({cls})
-              </p>
-              <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-                {isHigh ? 'High-confidence indicators of malicious credential harvesting or spoofing.' : 'No malicious heuristics or protocol violations detected.'}
-              </p>
-              <p className="text-[10px] mt-0.5 font-mono" style={{ color: 'var(--text-muted)' }}>Triage Confidence Score: {score}%</p>
-            </div>
-          </div>
-
-          {/* Risk Factors breakdown */}
-          <div>
-            <p className="text-[10px] uppercase tracking-wider font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>Forensic Risk Vector Breakdown</p>
-            <div className="space-y-2">
-              {factors.map(([name, level, delta]) => {
-                const c = (level === 'High Risk' || level === 'Misaligned' || level === 'Failed') ? 'text-red-500'
-                  : (level === 'Untrusted ASN' || level === 'Coercive Trigger') ? 'text-amber-500'
-                  : 'text-emerald-500'
-                return (
-                  <div key={name} className="flex items-center justify-between text-xs">
-                    <span className="flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
-                      <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--text-muted)' }} />{name}
-                    </span>
-                    <div className="flex items-center gap-3">
-                      <span className={`font-semibold ${c}`}>{level}</span>
-                      <span className="font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>{delta}</span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-            <button onClick={() => onSwitchTab('Investigation')} className="text-[10px] mt-3 underline font-medium" style={{ color: 'var(--accent)' }}>
-              View deep entity correlations →
-            </button>
-          </div>
-
-          {/* MITRE ATT&CK */}
-          <div>
-            <p className="text-[10px] uppercase tracking-wider font-semibold mb-1.5" style={{ color: 'var(--text-muted)' }}>MITRE ATT&CK® Technique</p>
-            <span className="inline-block font-mono text-[11px] px-2.5 py-1 rounded font-semibold"
-              style={{ color: 'var(--accent)', background: 'var(--accent-muted)', border: '1px solid var(--accent)' }}>
-              {t?.mitre_attack_mapping || 'T1566'}
-            </span>
-          </div>
-        </section>
+        {/* AI Investigation Panel Card */}
+        <div className="xl:col-span-4 flex flex-col">
+          <AIInvestigationPanel
+            t={t}
+            deterministic={result?.threat_analysis?.deterministic_assessment}
+          />
+        </div>
 
         {/* Right Stack: Authentication & Message Origin */}
         <div className="xl:col-span-3 flex flex-col gap-5">

@@ -1,0 +1,28 @@
+From: "PhonePe Security & KYC Operations" <kyc-team@phonepee-kyc-alerts.example>
+To: target.user@corp-india.example
+Subject: URGENT: Complete KYC within 24 hours or UPI service will be suspended
+Date: Mon, 01 Sep 2026 09:30:00 +0530
+Message-ID: <ind01-20260901-upi@phonepee-kyc-alerts.example>
+MIME-Version: 1.0
+Content-Type: text/html; charset=UTF-8
+Received: from mail-relay.phonepee-kyc-alerts.example (relay01.attacker-vps.net [185.220.101.99]) by mx.corp-india.example with ESMTP id IND01; Mon, 01 Sep 2026 09:30:05 +0530
+Authentication-Results: mx.corp-india.example;
+  spf=fail (domain of phonepee-kyc-alerts.example does not designate 185.220.101.99 as permitted sender) smtp.mailfrom=bounce@phonepee-kyc-alerts.example;
+  dkim=none (no signature found);
+  dmarc=fail (p=reject) header.from=phonepee-kyc-alerts.example
+
+<!DOCTYPE html>
+<html>
+<body>
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+  <h2>PhonePe UPI Security Alert</h2>
+  <p>Dear Customer,</p>
+  <p>As per regulatory guidelines, your PhonePe UPI wallet and linked bank accounts require mandatory <strong>KYC re-verification</strong>.</p>
+  <p style="color: red; font-weight: bold;">ACTION REQUIRED: Your UPI payment services will be suspended within 24 hours if identity is not verified.</p>
+  <p>Please click the secure portal link below to complete your Aadhaar and PAN verification immediately:</p>
+  <p><a href="https://phonepee-kyc-alerts.example/upi/kyc/verify?uid=88291029">https://phonepee-kyc-alerts.example/upi/kyc/verify</a></p>
+  <p>Do not share your UPI PIN or OTP with anyone.</p>
+  <p>Regards,<br>PhonePe KYC Verification Team</p>
+</div>
+</body>
+</html>

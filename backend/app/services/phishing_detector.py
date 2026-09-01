@@ -103,18 +103,28 @@ class PhishingDetector:
         "tinyurl.com",
     }
     _SUSPICIOUS_PATH_TERMS = {
+        "aadhaar",
         "account",
         "auth",
         "billing",
         "confirm",
         "credential",
+        "epfo",
+        "imps",
+        "kyc",
         "login",
+        "neft",
+        "pan",
         "password",
+        "payroll",
         "recover",
         "secure",
         "signin",
+        "uan",
         "unlock",
         "update",
+        "upi",
+        "upi-id",
         "validate",
         "verify",
         "wallet",
@@ -122,19 +132,29 @@ class PhishingDetector:
     _BRANDS: dict[str, set[str]] = {
         "amazon": {"amazon.com", "amazon.co.uk", "amazon.in"},
         "apple": {"apple.com", "icloud.com"},
+        "axis": {"axisbank.com"},
         "bankofamerica": {"bankofamerica.com"},
         "chase": {"chase.com"},
         "coinbase": {"coinbase.com"},
         "docusign": {"docusign.com"},
         "dropbox": {"dropbox.com"},
+        "epfo": {"epfindia.gov.in"},
         "facebook": {"facebook.com", "fb.com", "meta.com"},
         "google": {"google.com", "gmail.com", "googleusercontent.com"},
+        "hdfc": {"hdfcbank.com", "hdfc.com"},
+        "icici": {"icicibank.com"},
+        "irctc": {"irctc.co.in"},
         "linkedin": {"linkedin.com"},
         "microsoft": {"microsoft.com", "live.com", "office.com", "outlook.com"},
         "netflix": {"netflix.com"},
         "okta": {"okta.com"},
         "paypal": {"paypal.com"},
+        "paytm": {"paytm.com"},
+        "phonepay": {"phonepe.com"},
+        "phonepe": {"phonepe.com"},
+        "sbi": {"sbi.co.in", "onlinesbi.sbi", "onlinesbi.com", "statebankofindia.com"},
         "stripe": {"stripe.com"},
+        "uidai": {"uidai.gov.in"},
         "wellsfargo": {"wellsfargo.com"},
     }
     _MULTI_PART_SUFFIXES = {"co.uk", "com.au", "com.br", "co.in", "co.jp", "co.nz", "com.sg"}
@@ -430,7 +450,7 @@ class PhishingDetector:
         lowered = text.lower()
         findings: list[Finding] = []
 
-        if re.search(r"\b(?:urgent|immediately|action required|within \d+ hours?|final (?:notice|warning)|suspend(?:ed)? today)\b", lowered):
+        if re.search(r"\b(?:urgent|immediately|action required|within \d+ hours?|final (?:notice|warning)|suspend(?:ed)? today|abhi verify|jaldi)\b", lowered):
             findings.append(
                 Finding(
                     "urgency-pressure",
@@ -441,8 +461,8 @@ class PhishingDetector:
                 )
             )
 
-        if re.search(r"\b(?:account|mailbox|profile|access)\b", lowered) and re.search(
-            r"\b(?:disable[ds]?|suspend(?:ed|ing)?|lock(?:ed)?|deactivat(?:e|ed|ion))\b",
+        if re.search(r"\b(?:account|mailbox|profile|access|upi|wallet|uan|pan|service|order)\b", lowered) and re.search(
+            r"\b(?:disable[ds]?|suspend(?:ed|ing)?|lock(?:ed)?|deactivat(?:e|ed|ion)|restrict(?:ed|ion)?|hold)\b",
             lowered,
         ):
             findings.append(
@@ -455,7 +475,7 @@ class PhishingDetector:
                 )
             )
 
-        if re.search(r"\b(?:password|passcode|credential|one[- ]?time (?:code|password)|otp|verification code)\b", lowered) and re.search(r"\b(?:enter|share|provide|confirm|verify|submit|reset|sign[ -]?in|log[ -]?in)\b", lowered):
+        if re.search(r"\b(?:password|passcode|credential|one[- ]?time (?:code|password)|otp|verification code|pin|kyc|pan|aadhaar|uan)\b", lowered) and re.search(r"\b(?:enter|share|provide|confirm|verify|submit|reset|sign[ -]?in|log[ -]?in|link|update|complete)\b", lowered):
             findings.append(
                 Finding(
                     "credential-request",
@@ -466,7 +486,7 @@ class PhishingDetector:
                 )
             )
 
-        if re.search(r"\b(?:wire transfer|bank transfer|gift ?cards?|crypto(?:currency)?|bitcoin|payment instructions)\b", lowered):
+        if re.search(r"\b(?:wire transfer|bank transfer|gift ?cards?|crypto(?:currency)?|bitcoin|payment instructions|payroll|salary (?:account|disbursement)|bank account update|neft|imps|customs fee|fee to release)\b", lowered):
             findings.append(
                 Finding(
                     "payment-diversion",
@@ -488,7 +508,7 @@ class PhishingDetector:
                 )
             )
 
-        if re.search(r"\b(?:keep this confidential|do not call|bypass(?:ing)? (?:normal )?(?:process|approval)|i am (?:the )?(?:ceo|cfo|director))\b", lowered):
+        if re.search(r"\b(?:keep (?:this )?confidential|do not call|bypass(?:ing)? (?:normal )?(?:process|approval)|i am (?:the )?(?:ceo|cfo|director))\b", lowered):
             findings.append(
                 Finding(
                     "authority-bypass",

@@ -4,10 +4,12 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 import time
 from email.utils import getaddresses
 from pathlib import Path
 from typing import Annotated, Any
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
@@ -17,6 +19,10 @@ from app.db.session import get_db
 from app.models.schemas import (
     AnalystNoteCreate,
     AnalystNoteResponse,
+    CampaignDetectionResponse,
+    CampaignListItem,
+    CampaignListResponse,
+    CampaignProfile,
     CaseCreate,
     CaseResponse,
     CaseUpdate,
@@ -28,9 +34,11 @@ from app.models.schemas import (
 from app.services import case_service
 from app.services.ai_engine import ThreatAnalyzerService
 from app.services.auth_verifier import AuthVerifier
+from app.services.campaign_detector import CampaignDetectionService
 from app.services.geo_osint import GeoTrackerService
 from app.services.parser import EMLParser, InvalidEmailError
 from app.services.phishing_detector import PhishingDetector
+from app.services.threat_intelligence import ThreatIntelligenceService
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +188,202 @@ def get_case_timeline(case_id: int, db: Session = Depends(get_db)) -> TimelineSu
     return TimelineSummaryResponse.model_validate(timeline)
 
 
+# ── Campaign Management Endpoints ────────────────────────────
+
+def _load_email_items_from_db(db: Session, case_id: int | None = None) -> list[dict[str, Any]]:
+    """Loads normalized email artifacts with parsed investigation payloads from SQLite."""
+    if case_id is not None:
+        case = case_service.get_case(db, case_id)
+        if not case:
+            return []
+        artifacts = case.email_artifacts
+    else:
+        cases = case_service.get_cases(db)
+        artifacts = []
+        for c in cases:
+            artifacts.extend(c.email_artifacts)
+
+    items: list[dict[str, Any]] = []
+    for art in artifacts:
+        inv_payload: dict[str, Any] = {}
+        if art.case and art.case.investigation_results:
+            # Find the closest matching investigation result
+            for inv in art.case.investigation_results:
+                try:
+                    parsed = json.loads(inv.ai_analysis)
+                    if isinstance(parsed, dict):
+                        inv_payload = parsed
+                        break
+                except Exception:
+                    pass
+
+        email_meta = inv_payload.get("email", {})
+        items.append({
+            "id": art.id,
+            "artifact_id": art.id,
+            "case_id": art.case_id,
+            "subject": art.subject or email_meta.get("subject", ""),
+            "sender": art.sender or email_meta.get("from", ""),
+            "recipient": art.recipient or email_meta.get("to", ""),
+            "reply_to": email_meta.get("reply_to", ""),
+            "created_at": art.created_at.isoformat() if art.created_at else "",
+            "payload": inv_payload,
+            "received_headers": email_meta.get("received_headers", []),
+            "urls": email_meta.get("urls", []),
+            "geo_hops": inv_payload.get("geo_hops", []),
+            "threat_intelligence": inv_payload.get("threat_intelligence", []),
+            "threat_analysis": inv_payload.get("threat_analysis", {}),
+            "authentication": inv_payload.get("authentication", {}),
+            "verdict": art.case.threat_type if art.case else "phishing",
+            "risk_score": art.case.investigation_results[0].risk_score if art.case and art.case.investigation_results else 70,
+        })
+    return items
+
+
+@router.post("/cases/{case_id}/campaigns/detect", response_model=CampaignDetectionResponse)
+def detect_case_campaigns(case_id: int, db: Session = Depends(get_db)) -> CampaignDetectionResponse:
+    """Runs cross-email correlation across all email artifacts in a case and records timeline event."""
+    case = case_service.get_case(db, case_id)
+    if not case:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Case with ID {case_id} not found.",
+        )
+
+    items = _load_email_items_from_db(db, case_id=case_id)
+    result = CampaignDetectionService().detect_campaigns(items, case_id=case_id)
+
+    # Persist detected campaigns
+    persisted_campaigns = []
+    for camp_data in result["campaigns"]:
+        saved = case_service.save_or_update_campaign(db, camp_data, case_id=case_id)
+        camp_dict = json.loads(saved.data)
+        camp_dict["id"] = saved.id
+        persisted_campaigns.append(CampaignProfile.model_validate(camp_dict))
+
+    result["campaigns"] = persisted_campaigns
+
+    # Record Case 2 forensic timeline event
+    if result["status"] == "completed":
+        case_service.add_timeline_event(
+            db,
+            case_id=case_id,
+            event_type="CAMPAIGN_DETECTION_COMPLETED",
+            description=f"Campaign detection completed: {result['campaigns_detected']} campaign(s) detected across {result['emails_analyzed']} emails ({result['shared_iocs']} shared IOCs).",
+            event_metadata={
+                "emails_analyzed": result["emails_analyzed"],
+                "campaigns_detected": result["campaigns_detected"],
+                "high_confidence_campaigns": result["high_confidence_campaigns"],
+                "shared_iocs": result["shared_iocs"],
+            },
+        )
+    else:
+        case_service.add_timeline_event(
+            db,
+            case_id=case_id,
+            event_type="CAMPAIGN_DETECTION_UNAVAILABLE",
+            description=f"Campaign detection unavailable: {result['message']}",
+            event_metadata={
+                "emails_analyzed": result["emails_analyzed"],
+                "reason": result["status"],
+            },
+        )
+
+    return CampaignDetectionResponse.model_validate(result)
+
+
+@router.post("/campaigns/detect", response_model=CampaignDetectionResponse)
+def detect_all_campaigns(
+    case_id: int | None = None,
+    db: Session = Depends(get_db),
+) -> CampaignDetectionResponse:
+    """Runs cross-email correlation across all cases or a specified case."""
+    if case_id is not None:
+        return detect_case_campaigns(case_id=case_id, db=db)
+
+    items = _load_email_items_from_db(db, case_id=None)
+    result = CampaignDetectionService().detect_campaigns(items, case_id=None)
+
+    persisted_campaigns = []
+    for camp_data in result["campaigns"]:
+        saved = case_service.save_or_update_campaign(db, camp_data, case_id=None)
+        camp_dict = json.loads(saved.data)
+        camp_dict["id"] = saved.id
+        persisted_campaigns.append(CampaignProfile.model_validate(camp_dict))
+
+    result["campaigns"] = persisted_campaigns
+    return CampaignDetectionResponse.model_validate(result)
+
+
+@router.get("/campaigns", response_model=CampaignListResponse)
+def list_campaigns(
+    case_id: int | None = None,
+    db: Session = Depends(get_db),
+) -> CampaignListResponse:
+    """Retrieves all persisted campaigns with SOC aggregate metrics."""
+    camps = case_service.get_campaigns(db, case_id=case_id)
+    items = []
+    total_emails = 0
+    total_iocs = 0
+    high_conf = 0
+
+    for c in camps:
+        items.append(
+            CampaignListItem(
+                id=c.id,
+                campaign_id=c.campaign_id,
+                case_id=c.case_id,
+                name=c.name,
+                status=c.status,
+                threat_type=c.threat_type,
+                confidence=c.confidence,
+                email_count=c.email_count,
+                shared_ioc_count=c.shared_ioc_count,
+                shared_infrastructure_count=c.shared_infrastructure_count,
+                created_at=c.created_at.isoformat() if c.created_at else "",
+                updated_at=c.updated_at.isoformat() if c.updated_at else "",
+            )
+        )
+        total_emails += c.email_count
+        total_iocs += c.shared_ioc_count
+        if c.confidence >= 85:
+            high_conf += 1
+
+    return CampaignListResponse(
+        total_campaigns=len(items),
+        high_confidence_count=high_conf,
+        total_emails_correlated=total_emails,
+        total_shared_iocs=total_iocs,
+        campaigns=items,
+    )
+
+
+@router.get("/campaigns/{campaign_id}", response_model=CampaignProfile)
+def get_campaign(campaign_id: str, db: Session = Depends(get_db)) -> CampaignProfile:
+    """Retrieves full campaign profile by unique ID or database ID."""
+    camp = case_service.get_campaign(db, campaign_id)
+    if not camp:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Campaign with ID '{campaign_id}' not found.",
+        )
+    profile_data = json.loads(camp.data)
+    profile_data["id"] = camp.id
+    return CampaignProfile.model_validate(profile_data)
+
+
+@router.get("/cases/{case_id}/campaigns", response_model=CampaignListResponse)
+def list_case_campaigns(case_id: int, db: Session = Depends(get_db)) -> CampaignListResponse:
+    """Retrieves all campaigns associated with a specific case."""
+    case = case_service.get_case(db, case_id)
+    if not case:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Case with ID {case_id} not found.",
+        )
+    return list_campaigns(case_id=case_id, db=db)
+
+
 # ── Existing Analysis & Investigation Routes ──────────────────
 
 @router.post("/phishing/analyze", response_model=PhishingScanResponse)
@@ -283,13 +487,24 @@ async def investigate_email(
         stage_timings["geo_ms"] = parallel_elapsed_ms
         stage_timings["ai_ms"] = parallel_elapsed_ms
 
-        # ── STAGE 6: Attack graph ─────────────────────────────
+        # ── STAGE 6: Threat Intelligence & IOC Enrichment ────
+        t0_intel = time.perf_counter()
+        threat_intelligence = await ThreatIntelligenceService().enrich_all(
+            email_data=email_data,
+            phishing_assessment=phishing_assessment.model_dump() if hasattr(phishing_assessment, "model_dump") else phishing_assessment,
+            geo_hops=geo_hops,
+            authentication=authentication,
+        )
+        stage_timings["intel_ms"] = ms(t0_intel)
+
+        # ── STAGE 7: Attack graph ─────────────────────────────
         t0 = time.perf_counter()
         attack_graph = _build_attack_graph(
             email_data=email_data,
             authentication=authentication,
             geo_hops=geo_hops,
             threat_analysis=threat_analysis,
+            threat_intelligence=threat_intelligence,
         )
         stage_timings["graph_ms"] = ms(t0)
 
@@ -299,6 +514,7 @@ async def investigate_email(
             "geo_hops": geo_hops,
             "threat_analysis": threat_analysis,
             "attack_graph": attack_graph,
+            "threat_intelligence": threat_intelligence,
         }
 
         # ── STAGE 7: Evidence hash ────────────────────────────
@@ -462,9 +678,7 @@ def _record_forensic_stages(
     # AI_ANALYSIS_COMPLETED or AI_ANALYSIS_SKIPPED
     ta_classification = threat_analysis.get("classification", "")
     ta_score = threat_analysis.get("confidence_score", 0)
-    ta_explanation = threat_analysis.get("explanation", "")
-    # Heuristic: if explanation contains "heuristic" or "fallback" it means Groq was skipped
-    ai_used = "heuristic" not in ta_explanation.lower() and "fallback" not in ta_explanation.lower()
+    ai_used = bool(threat_analysis.get("ai_used", False))
     if ai_used:
         stages.append({
             "event_type": "AI_ANALYSIS_COMPLETED",
@@ -493,6 +707,39 @@ def _record_forensic_stages(
                 "classification": ta_classification,
                 "confidence_score": ta_score,
                 "fallback": True,
+            },
+        })
+
+    # THREAT_INTELLIGENCE_COMPLETED or THREAT_INTELLIGENCE_UNAVAILABLE
+    threat_intel = payload.get("threat_intelligence", [])
+    if threat_intel:
+        malicious_count = sum(1 for i in threat_intel if i.get("status") == "malicious")
+        suspicious_count = sum(1 for i in threat_intel if i.get("status") == "suspicious")
+        unknown_count = sum(1 for i in threat_intel if i.get("status") in ("unknown", "unavailable"))
+        stages.append({
+            "event_type": "THREAT_INTELLIGENCE_COMPLETED",
+            "description": (
+                f"Threat intelligence enriched {len(threat_intel)} observables. "
+                f"Identified {malicious_count} malicious, {suspicious_count} suspicious, {unknown_count} unrated/neutral."
+            ),
+            "metadata": {
+                "stage": "threat_intelligence",
+                "duration_ms": stage_timings.get("intel_ms", 0),
+                "ioc_count": len(threat_intel),
+                "enriched": len(threat_intel),
+                "malicious": malicious_count,
+                "suspicious": suspicious_count,
+                "unknown": unknown_count,
+            },
+        })
+    else:
+        stages.append({
+            "event_type": "THREAT_INTELLIGENCE_UNAVAILABLE",
+            "description": "No actionable IOC observables discovered for threat intelligence enrichment.",
+            "metadata": {
+                "stage": "threat_intelligence",
+                "duration_ms": stage_timings.get("intel_ms", 0),
+                "ioc_count": 0,
             },
         })
 
@@ -535,67 +782,247 @@ def _build_attack_graph(
     authentication: dict[str, str],
     geo_hops: list[dict[str, str]],
     threat_analysis: dict[str, Any],
+    threat_intelligence: list[dict[str, Any]] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
+    threat_intelligence = threat_intelligence or []
+    intel_by_indicator = {i.get("indicator", "").lower().strip(): i for i in threat_intelligence}
+
+    nodes_by_id: dict[str, dict[str, Any]] = {}
+    links: list[dict[str, Any]] = []
+    seen_links: set[tuple[str, str, str]] = set()
+
+    def add_node(node: dict[str, Any]) -> None:
+        node_id = node["id"]
+        if node_id not in nodes_by_id:
+            nodes_by_id[node_id] = node
+        else:
+            # Merge any richer metadata if present
+            for k, v in node.items():
+                if v is not None and (nodes_by_id[node_id].get(k) is None or nodes_by_id[node_id].get(k) in ("Unknown", "unknown", 0, "")):
+                    nodes_by_id[node_id][k] = v
+
+    def add_link(source: str, target: str, relation: str) -> None:
+        key = (source, target, relation)
+        if key not in seen_links and source in nodes_by_id and target in nodes_by_id:
+            seen_links.add(key)
+            links.append({"source": source, "target": target, "relation": relation})
+
+    # 1. Email Node (Central Subject)
     message_id = email_data.get("message_id") or "uploaded-email"
     email_node_id = f"email:{message_id}"
-    nodes: list[dict[str, Any]] = [
-        {
-            "id": email_node_id,
-            "name": email_data.get("subject") or "Email message",
-            "type": "email",
-        }
-    ]
-    links: list[dict[str, Any]] = []
+    add_node({
+        "id": email_node_id,
+        "name": email_data.get("subject") or "Email message",
+        "type": "email",
+        "message_id": message_id,
+        "date": email_data.get("date", ""),
+        "status": "malicious" if threat_analysis.get("risk_level") in ("critical", "high") else "suspicious" if threat_analysis.get("risk_level") == "medium" else "benign",
+        "confidence": threat_analysis.get("confidence", threat_analysis.get("confidence_score", 0)),
+    })
 
+    # 2. Sender & Sender Domain
     sender = _first_address(email_data.get("from", ""))
+    sender_id = f"sender:{sender.lower()}" if sender else None
     if sender:
-        sender_id = f"sender:{sender.lower()}"
-        nodes.append({"id": sender_id, "name": sender, "type": "sender"})
-        links.append({"source": sender_id, "target": email_node_id, "relation": "SENT"})
+        sender_intel = intel_by_indicator.get(sender.lower())
+        sender_node = {
+            "id": sender_id,
+            "name": sender,
+            "type": "sender",
+            "status": sender_intel.get("status", "unknown") if sender_intel else "unknown",
+            "confidence": sender_intel.get("confidence", 0) if sender_intel else 0,
+            "source": sender_intel.get("source", "Local Analysis") if sender_intel else "Local Analysis",
+            "reasons": sender_intel.get("reasons", []) if sender_intel else [],
+        }
+        add_node(sender_node)
 
+        # Domain node for sender
+        if "@" in sender:
+            sender_domain = sender.split("@")[-1].lower().strip(">")
+            domain_id = f"domain:{sender_domain}"
+            domain_intel = intel_by_indicator.get(sender_domain)
+            add_node({
+                "id": domain_id,
+                "name": sender_domain,
+                "type": "domain",
+                "status": domain_intel.get("status", "unknown") if domain_intel else "unknown",
+                "confidence": domain_intel.get("confidence", 0) if domain_intel else 0,
+                "source": domain_intel.get("source", "Local Analysis") if domain_intel else "Local Analysis",
+                "reasons": domain_intel.get("reasons", []) if domain_intel else [],
+            })
+            add_link(sender_id, domain_id, "BELONGS_TO_DOMAIN")
+
+    # 3. Recipients
     for recipient in _addresses(email_data.get("to", "")):
         recipient_id = f"recipient:{recipient.lower()}"
-        nodes.append({"id": recipient_id, "name": recipient, "type": "recipient"})
-        links.append({"source": email_node_id, "target": recipient_id, "relation": "DELIVERED_TO"})
+        add_node({
+            "id": recipient_id,
+            "name": recipient,
+            "type": "recipient",
+            "status": "benign",
+            "confidence": 100,
+        })
+        add_link(email_node_id, recipient_id, "DELIVERED_TO")
 
-    for hop in geo_hops:
-        ip = hop["ip"]
+    # 4. Sequential Relay Hop-Chain (Chronological: Origin -> Intermediate -> Destination MX)
+    # RFC 5322 received headers appear top-to-bottom (newest first). Reversing gives chronological order.
+    chronological_headers = list(reversed(email_data.get("received_headers", [])))
+    relay_ips_in_order: list[str] = []
+    seen_ips: set[str] = set()
+
+    for header in chronological_headers:
+        for candidate in re.findall(r"\b(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}\b", header):
+            if candidate not in seen_ips:
+                seen_ips.add(candidate)
+                relay_ips_in_order.append(candidate)
+
+    # Fallback to geo_hops if no header regex match
+    if not relay_ips_in_order and geo_hops:
+        relay_ips_in_order = [h["ip"] for h in geo_hops if h.get("ip")]
+
+    geo_map = {h["ip"]: h for h in geo_hops if "ip" in h}
+    relay_node_ids: list[str] = []
+
+    for ip in relay_ips_in_order:
+        hop = geo_map.get(ip, {})
+        ip_intel = intel_by_indicator.get(ip)
         location = ", ".join(
             value for value in (hop.get("city"), hop.get("country")) if value and value != "Unknown"
         )
-        nodes.append(
-            {
-                "id": f"ip:{ip}",
-                "name": f"{ip} ({location})" if location else ip,
-                "type": "relay_ip",
-                "country": hop.get("country", "Unknown"),
-                "city": hop.get("city", "Unknown"),
-                "isp": hop.get("isp", "Unknown"),
-                "asn": hop.get("asn", "Unknown"),
-            }
-        )
-        links.append({"source": f"ip:{ip}", "target": email_node_id, "relation": "RELAYED"})
+        ip_node_id = f"ip:{ip}"
+        relay_node_ids.append(ip_node_id)
+        add_node({
+            "id": ip_node_id,
+            "name": f"{ip} ({location})" if location else ip,
+            "type": "relay_ip",
+            "ip": ip,
+            "country": hop.get("country", "Unknown"),
+            "city": hop.get("city", "Unknown"),
+            "isp": hop.get("isp", "Unknown"),
+            "asn": hop.get("asn", "Unknown"),
+            "status": ip_intel.get("status", "unknown") if ip_intel else "unknown",
+            "confidence": ip_intel.get("confidence", 0) if ip_intel else 0,
+            "source": ip_intel.get("source", "Local Analysis") if ip_intel else "Local Analysis",
+            "reasons": ip_intel.get("reasons", []) if ip_intel else [],
+        })
 
+    # Sequential relay chain linking
+    if relay_node_ids:
+        # Link sender to first originating relay
+        if sender_id:
+            add_link(sender_id, relay_node_ids[0], "ORIGINATES_FROM")
+
+        # Link sequential hops: Hop 1 -> Hop 2 -> Hop 3
+        for i in range(len(relay_node_ids) - 1):
+            add_link(relay_node_ids[i], relay_node_ids[i + 1], "RELAYED_TO")
+
+        # Link final gateway hop to email node
+        add_link(relay_node_ids[-1], email_node_id, "DELIVERED_VIA")
+    elif sender_id:
+        # If no relay IPs observed, fallback direct link
+        add_link(sender_id, email_node_id, "SENT")
+
+    # 5. Embedded URLs & Domain Correlation
+    seen_urls: set[str] = set()
+    url_items: list[dict[str, Any]] = []
+
+    for intel in threat_intelligence:
+        if intel.get("type") == "url":
+            url_val = intel.get("indicator", "").strip()
+            if url_val and url_val not in seen_urls:
+                seen_urls.add(url_val)
+                url_items.append(intel)
+
+    for u in email_data.get("urls", []):
+        u_clean = u.strip() if u else ""
+        if u_clean and u_clean not in seen_urls:
+            seen_urls.add(u_clean)
+            u_intel = intel_by_indicator.get(u_clean.lower())
+            url_items.append(u_intel or {
+                "indicator": u_clean,
+                "type": "url",
+                "status": "suspicious",
+                "confidence": 75,
+                "source": "Local Analysis",
+                "reasons": ["Extracted from message body"],
+            })
+
+    for intel in url_items:
+        url_val = intel.get("indicator", "")
+        url_node_id = f"url:{url_val}"
+        add_node({
+            "id": url_node_id,
+            "name": url_val[:45] + ("..." if len(url_val) > 45 else ""),
+            "type": "url",
+            "indicator": url_val,
+            "status": intel.get("status", "unknown"),
+            "confidence": intel.get("confidence", 0),
+            "source": intel.get("source", "Local Analysis"),
+            "reasons": intel.get("reasons", []),
+        })
+        add_link(email_node_id, url_node_id, "EMBEDS_URL")
+
+        # Extract URL domain and link URL -> Domain
+        url_domain = _url_to_domain(url_val)
+        if url_domain:
+            url_domain_id = f"domain:{url_domain}"
+            domain_intel = intel_by_indicator.get(url_domain)
+            add_node({
+                "id": url_domain_id,
+                "name": url_domain,
+                "type": "domain",
+                "status": domain_intel.get("status", intel.get("status", "unknown")) if domain_intel else intel.get("status", "unknown"),
+                "confidence": domain_intel.get("confidence", intel.get("confidence", 0)) if domain_intel else intel.get("confidence", 0),
+                "source": domain_intel.get("source", "Local Analysis") if domain_intel else "Local Analysis",
+                "reasons": domain_intel.get("reasons", []) if domain_intel else [],
+            })
+            add_link(url_node_id, url_domain_id, "HOSTED_ON")
+
+    # 6. Authentication Results Node
     auth_id = "authentication:results"
     auth_name = " | ".join(
         f"{mechanism.upper()}: {'pass' if passed else 'fail'}"
         for mechanism, passed in authentication.items()
     )
-    nodes.append({"id": auth_id, "name": auth_name, "type": "authentication"})
-    links.append({"source": auth_id, "target": email_node_id, "relation": "VALIDATES"})
+    auth_status = "benign" if all(v == "pass" for v in authentication.values()) else "suspicious" if any(v == "fail" for v in authentication.values()) else "unknown"
+    add_node({
+        "id": auth_id,
+        "name": auth_name,
+        "type": "authentication",
+        "status": auth_status,
+        "confidence": 90,
+    })
+    add_link(auth_id, email_node_id, "VALIDATES")
 
+    # 7. Threat Assessment Node (AI + Technical Risk)
     threat_id = "threat:assessment"
-    nodes.append(
-        {
-            "id": threat_id,
-            "name": threat_analysis.get("classification", "Unknown"),
-            "type": "threat_assessment",
-            "confidence_score": threat_analysis.get("confidence_score", 0),
-        }
-    )
-    links.append({"source": threat_id, "target": email_node_id, "relation": "ASSESSES"})
+    det = threat_analysis.get("deterministic_assessment") or {}
+    ta_status = "malicious" if threat_analysis.get("risk_level") in ("critical", "high") else "suspicious" if threat_analysis.get("risk_level") == "medium" else "benign"
+    add_node({
+        "id": threat_id,
+        "name": f"Verdict: {threat_analysis.get('threat_type', threat_analysis.get('classification', 'Threat Assessment'))}",
+        "type": "threat_assessment",
+        "status": ta_status,
+        "confidence_score": threat_analysis.get("confidence", threat_analysis.get("confidence_score", 0)),
+        "threat_type": threat_analysis.get("threat_type", threat_analysis.get("classification", "Unknown")),
+        "deterministic_risk": det.get("risk_score") if isinstance(det, dict) else getattr(det, "risk_score", None),
+        "summary": threat_analysis.get("summary") or threat_analysis.get("explanation", ""),
+    })
+    add_link(threat_id, email_node_id, "ASSESSES")
 
-    return {"nodes": nodes, "links": links}
+    return {"nodes": list(nodes_by_id.values()), "links": links}
+
+
+def _url_to_domain(url_str: str) -> str:
+    """Extracts hostname domain from URL."""
+    try:
+        candidate = url_str.strip()
+        candidate = candidate.replace("[.]", ".").replace("hxxp://", "http://").replace("hxxps://", "https://")
+        if "://" not in candidate:
+            candidate = f"http://{candidate}"
+        return (urlsplit(candidate).hostname or "").lower().strip("[]/")
+    except (ValueError, Exception):
+        return ""
 
 
 def _addresses(header_value: str) -> list[str]:

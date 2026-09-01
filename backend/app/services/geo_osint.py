@@ -24,7 +24,8 @@ class GeoTrackerService:
 
         timeout = httpx.Timeout(5.0, connect=2.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
-            return await asyncio.gather(*(self._lookup_ip(client, ip) for ip in ips))
+            hops = await asyncio.gather(*(self._lookup_ip(client, ip) for ip in ips))
+            return [hop for hop in hops if hop is not None]
 
     def _extract_public_ips(self, received_headers: list[str]) -> list[str]:
         discovered: list[str] = []
@@ -43,26 +44,17 @@ class GeoTrackerService:
 
         return discovered
 
-    async def _lookup_ip(self, client: httpx.AsyncClient, ip: str) -> dict[str, str]:
+    async def _lookup_ip(self, client: httpx.AsyncClient, ip: str) -> dict[str, str] | None:
         cached = self._cache.get(ip)
         if cached is not None:
             return cached.copy()
-
-        fallback = {
-            "ip": ip,
-            "country": "Unknown",
-            "city": "Unknown",
-            "isp": "Unknown",
-            "asn": "Unknown",
-        }
 
         try:
             response = await client.get(f"http://ip-api.com/json/{ip}")
             response.raise_for_status()
             data: dict[str, Any] = response.json()
             if data.get("status") != "success":
-                self._cache[ip] = fallback
-                return fallback.copy()
+                return None
 
             hop = {
                 "ip": ip,
@@ -73,9 +65,8 @@ class GeoTrackerService:
             }
             self._cache[ip] = hop
             return hop.copy()
-        except (httpx.HTTPError, ValueError):
-            self._cache[ip] = fallback
-            return fallback.copy()
+        except (httpx.HTTPError, ValueError, Exception):
+            return None
 
     @staticmethod
     def _is_enabled() -> bool:

@@ -1,0 +1,34 @@
+From: "Rajesh Krishnamurthy (Chief Financial Officer)" <cfo@infosys-corp-hq.example>
+To: hr-payroll@company.example
+Reply-To: r.krishnamurthy.cfo@finance-auth-portal.example
+Subject: CONFIDENTIAL: Salary bank account update required
+Date: Mon, 01 Sep 2026 12:00:00 +0530
+Message-ID: <ind06-20260901-bec@infosys-corp-hq.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Received: from mail.infosys-corp-hq.example (relay.offshore-host.net [185.220.101.45]) by mx.company.example with ESMTP id IND06; Mon, 01 Sep 2026 12:00:05 +0530
+Authentication-Results: mx.company.example;
+  spf=softfail (domain of infosys-corp-hq.example does not designate 185.220.101.45 as permitted sender) smtp.mailfrom=bounce@infosys-corp-hq.example;
+  dkim=fail;
+  dmarc=fail (p=quarantine) header.from=infosys-corp-hq.example
+
+Hi HR Team,
+
+Please update my primary corporate salary disbursement and payroll account details immediately before the upcoming monthly NEFT/IMPS payroll run.
+
+My previous salary account is undergoing a compliance audit with the corporate banking branch. 
+
+Please route all future payroll compensation to the following designated account:
+
+Account Holder: Rajesh Krishnamurthy
+Bank: Corporate Preferred Banking
+Account No: [SYNTHETIC-ACC-9920110]
+IFSC Code: [SYNTHETIC-IFSC-0001]
+Account Type: Salary / Current
+
+Please keep this update confidential until the internal banking audit is completed. Confirm as soon as the ERP payroll record is modified.
+
+Best regards,
+Rajesh Krishnamurthy
+Chief Financial Officer
+Infosys Corp Holdings
