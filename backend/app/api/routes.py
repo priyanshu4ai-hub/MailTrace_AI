@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.db.models import Case
@@ -32,9 +32,19 @@ from app.models.schemas import (
     LedgerVerificationResponse,
     PhishingScanRequest,
     PhishingScanResponse,
+    ReportCreate,
+    ReportListItem,
+    ReportListResponse,
+    ReportResponse,
+    ResponseActionApproveRequest,
+    ResponseActionCreate,
+    ResponseActionExecuteRequest,
+    ResponseActionListResponse,
+    ResponseActionRejectRequest,
+    ResponseActionResponse,
     TimelineSummaryResponse,
 )
-from app.services import case_service, evidence_ledger
+from app.services import case_service, evidence_ledger, report_service, response_service
 from app.services.ai_engine import ThreatAnalyzerService
 from app.services.auth_verifier import AuthVerifier
 from app.services.campaign_detector import CampaignDetectionService
@@ -243,6 +253,277 @@ def verify_case_ledger_integrity(case_id: int, db: Session = Depends(get_db)) ->
             detail=res.get("message", "Case not found."),
         )
     return LedgerVerificationResponse.model_validate(res)
+
+
+# ── DFIR Report Endpoints ────────────────────────────────────
+
+@router.post("/cases/{case_id}/reports", response_model=ReportResponse, status_code=status.HTTP_201_CREATED, tags=["reports"])
+def generate_case_dfir_report(
+    case_id: int,
+    req: ReportCreate | None = None,
+    db: Session = Depends(get_db),
+) -> ReportResponse:
+    """
+    Generate an automated DFIR incident report or Executive Summary using actual persisted Case 1–8 findings.
+    Seals the report with its SHA-256 canonical hash into the immutable Evidence Ledger and logs timeline event.
+    """
+    case = case_service.get_case(db, case_id)
+    if not case:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Case with ID {case_id} not found.",
+        )
+
+    r_type = req.report_type if req else "DFIR_FULL"
+    r_title = req.title if req and req.title else ""
+
+    report = report_service.create_case_report(
+        db=db,
+        case_id=case_id,
+        report_type=r_type,
+        title=r_title,
+    )
+
+    content_data = {}
+    try:
+        content_data = json.loads(report.content)
+    except Exception:
+        pass
+
+    return ReportResponse(
+        id=report.id,
+        case_id=report.case_id,
+        report_id=report.report_id,
+        report_type=report.report_type,
+        title=report.title,
+        report_hash=report.report_hash,
+        ledger_status=report.ledger_status,
+        generated_at=report.generated_at.isoformat() if report.generated_at else "",
+        created_at=report.created_at.isoformat() if report.created_at else "",
+        content=content_data,
+    )
+
+
+@router.get("/cases/{case_id}/reports", response_model=ReportListResponse, tags=["reports"])
+def get_case_report_history(case_id: int, db: Session = Depends(get_db)) -> ReportListResponse:
+    """Retrieve historical generated reports for a given case."""
+    case = case_service.get_case(db, case_id)
+    if not case:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Case with ID {case_id} not found.",
+        )
+
+    reports = report_service.get_case_reports(db, case_id)
+    serialized = [
+        ReportListItem(
+            id=r.id,
+            case_id=r.case_id,
+            report_id=r.report_id,
+            report_type=r.report_type,
+            title=r.title,
+            report_hash=r.report_hash,
+            ledger_status=r.ledger_status,
+            generated_at=r.generated_at.isoformat() if r.generated_at else "",
+            created_at=r.created_at.isoformat() if r.created_at else "",
+        )
+        for r in reports
+    ]
+    return ReportListResponse(total_reports=len(serialized), reports=serialized)
+
+
+@router.get("/cases/{case_id}/reports/{report_id}", response_model=ReportResponse, tags=["reports"])
+def get_single_case_report(case_id: int, report_id: str, db: Session = Depends(get_db)) -> ReportResponse:
+    """Retrieve a single generated report with its full structured content JSON."""
+    report = report_service.get_report(db, report_id)
+    if not report or report.case_id != case_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Report '{report_id}' for case {case_id} not found.",
+        )
+
+    content_data = {}
+    try:
+        content_data = json.loads(report.content)
+    except Exception:
+        pass
+
+    return ReportResponse(
+        id=report.id,
+        case_id=report.case_id,
+        report_id=report.report_id,
+        report_type=report.report_type,
+        title=report.title,
+        report_hash=report.report_hash,
+        ledger_status=report.ledger_status,
+        generated_at=report.generated_at.isoformat() if report.generated_at else "",
+        created_at=report.created_at.isoformat() if report.created_at else "",
+        content=content_data,
+    )
+
+
+@router.get("/cases/{case_id}/reports/{report_id}/markdown", tags=["reports"])
+def get_case_report_markdown(case_id: int, report_id: str, db: Session = Depends(get_db)) -> Response:
+    """Retrieve a single generated report rendered into GitHub-flavored Markdown for export."""
+    report = report_service.get_report(db, report_id)
+    if not report or report.case_id != case_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Report '{report_id}' for case {case_id} not found.",
+        )
+
+    content_data = {}
+    try:
+        content_data = json.loads(report.content)
+    except Exception:
+        pass
+
+    md_text = report_service.render_markdown(content_data)
+    return Response(content=md_text, media_type="text/markdown")
+
+
+# ── Incident Response & SOC Automation Endpoints ─────────────
+
+def _serialize_response_action(action) -> ResponseActionResponse:
+    """Convert a ResponseAction ORM object to a ResponseActionResponse schema."""
+    evidence_list = []
+    try:
+        evidence_list = json.loads(action.evidence_json) if action.evidence_json else []
+    except Exception:
+        pass
+    return ResponseActionResponse(
+        id=action.id,
+        response_id=action.response_id,
+        case_id=action.case_id,
+        action_type=action.action_type,
+        target=action.target,
+        severity=action.severity,
+        reason=action.reason,
+        evidence=evidence_list,
+        source=action.source,
+        status=action.status,
+        execution_mode=action.execution_mode,
+        requested_by=action.requested_by,
+        approved_by=action.approved_by,
+        result=action.result,
+        result_message=action.result_message,
+        created_at=action.created_at.isoformat() if action.created_at else "",
+        approved_at=action.approved_at.isoformat() if action.approved_at else None,
+        executed_at=action.executed_at.isoformat() if action.executed_at else None,
+    )
+
+
+@router.post("/cases/{case_id}/responses/recommend", response_model=ResponseActionListResponse, tags=["responses"])
+def generate_response_recommendations(
+    case_id: int,
+    db: Session = Depends(get_db),
+) -> ResponseActionListResponse:
+    """Analyze actual case findings and generate deterministic, explainable incident response recommendations."""
+    case = case_service.get_case(db, case_id)
+    if not case:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Case with ID {case_id} not found.")
+
+    all_actions = response_service.generate_case_recommendations(db, case_id)
+    serialized = [_serialize_response_action(a) for a in all_actions]
+    return ResponseActionListResponse(
+        case_id=case_id,
+        total_actions=len(serialized),
+        recommended_count=sum(1 for a in serialized if a.status == "RECOMMENDED"),
+        pending_approval_count=sum(1 for a in serialized if a.status == "PENDING_APPROVAL"),
+        approved_count=sum(1 for a in serialized if a.status == "APPROVED"),
+        executed_count=sum(1 for a in serialized if a.status == "EXECUTED"),
+        rejected_count=sum(1 for a in serialized if a.status == "REJECTED"),
+        actions=serialized,
+    )
+
+
+@router.get("/cases/{case_id}/responses", response_model=ResponseActionListResponse, tags=["responses"])
+def get_case_response_actions(
+    case_id: int,
+    db: Session = Depends(get_db),
+) -> ResponseActionListResponse:
+    """Retrieve all incident response actions for a case with summary metrics."""
+    case = case_service.get_case(db, case_id)
+    if not case:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Case with ID {case_id} not found.")
+
+    actions = response_service.get_case_responses(db, case_id)
+    serialized = [_serialize_response_action(a) for a in actions]
+    return ResponseActionListResponse(
+        case_id=case_id,
+        total_actions=len(serialized),
+        recommended_count=sum(1 for a in serialized if a.status == "RECOMMENDED"),
+        pending_approval_count=sum(1 for a in serialized if a.status == "PENDING_APPROVAL"),
+        approved_count=sum(1 for a in serialized if a.status == "APPROVED"),
+        executed_count=sum(1 for a in serialized if a.status == "EXECUTED"),
+        rejected_count=sum(1 for a in serialized if a.status == "REJECTED"),
+        actions=serialized,
+    )
+
+
+@router.get("/cases/{case_id}/responses/{response_id}", response_model=ResponseActionResponse, tags=["responses"])
+def get_single_response_action(
+    case_id: int,
+    response_id: str,
+    db: Session = Depends(get_db),
+) -> ResponseActionResponse:
+    """Retrieve a single incident response action with full audit trail."""
+    action = response_service.get_response(db, response_id)
+    if not action or action.case_id != case_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Response action '{response_id}' for case {case_id} not found.")
+    return _serialize_response_action(action)
+
+
+@router.post("/cases/{case_id}/responses/{response_id}/approve", response_model=ResponseActionResponse, tags=["responses"])
+def approve_response_action(
+    case_id: int,
+    response_id: str,
+    req: ResponseActionApproveRequest | None = None,
+    db: Session = Depends(get_db),
+) -> ResponseActionResponse:
+    """Approve a response action through the analyst approval gate."""
+    approved_by = req.approved_by if req else "SOC Lead Analyst"
+    try:
+        action = response_service.approve_response_action(db, case_id, response_id, approved_by)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return _serialize_response_action(action)
+
+
+@router.post("/cases/{case_id}/responses/{response_id}/reject", response_model=ResponseActionResponse, tags=["responses"])
+def reject_response_action(
+    case_id: int,
+    response_id: str,
+    req: ResponseActionRejectRequest | None = None,
+    db: Session = Depends(get_db),
+) -> ResponseActionResponse:
+    """Reject a response action, preventing any subsequent execution."""
+    rejected_by = req.rejected_by if req else "SOC Lead Analyst"
+    reason = req.reason if req else "Action rejected by SOC analyst."
+    try:
+        action = response_service.reject_response_action(db, case_id, response_id, rejected_by, reason)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return _serialize_response_action(action)
+
+
+@router.post("/cases/{case_id}/responses/{response_id}/execute", response_model=ResponseActionResponse, tags=["responses"])
+def execute_response_action(
+    case_id: int,
+    response_id: str,
+    req: ResponseActionExecuteRequest | None = None,
+    db: Session = Depends(get_db),
+) -> ResponseActionResponse:
+    """
+    Execute an approved response action in controlled SIMULATION mode.
+    Strict guardrail: Only APPROVED actions may proceed to execution.
+    """
+    executed_by = req.executed_by if req else "SOC Automation Engine"
+    try:
+        action = response_service.execute_response_action(db, case_id, response_id, executed_by)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return _serialize_response_action(action)
 
 
 # ── Campaign Management Endpoints ────────────────────────────

@@ -45,6 +45,12 @@ class Case(Base):
     ledger_entries: Mapped[list[EvidenceLedger]] = relationship(
         "EvidenceLedger", back_populates="case", cascade="all, delete-orphan"
     )
+    reports: Mapped[list[Report]] = relationship(
+        "Report", back_populates="case", cascade="all, delete-orphan"
+    )
+    response_actions: Mapped[list[ResponseAction]] = relationship(
+        "ResponseAction", back_populates="case", cascade="all, delete-orphan"
+    )
 
 
 class Campaign(Base):
@@ -138,4 +144,48 @@ class EvidenceLedger(Base):
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     case: Mapped[Case] = relationship("Case", back_populates="ledger_entries")
+
+
+class Report(Base):
+    __tablename__ = "reports"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    case_id: Mapped[int] = mapped_column(Integer, ForeignKey("cases.id", ondelete="CASCADE"), index=True, nullable=False)
+    report_id: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    report_type: Mapped[str] = mapped_column(String(32), default="DFIR_FULL", nullable=False)
+    title: Mapped[str] = mapped_column(String(255), default="Forensic Incident Report", nullable=False)
+    content: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    report_hash: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    ledger_status: Mapped[str] = mapped_column(String(32), default="VERIFIED", nullable=False)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    case: Mapped[Case] = relationship("Case", back_populates="reports")
+
+
+class ResponseAction(Base):
+    __tablename__ = "response_actions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    response_id: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    case_id: Mapped[int] = mapped_column(Integer, ForeignKey("cases.id", ondelete="CASCADE"), index=True, nullable=False)
+    action_type: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    target: Mapped[str] = mapped_column(String(512), nullable=False)
+    severity: Mapped[str] = mapped_column(String(32), default="medium", nullable=False)
+    reason: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    evidence_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    source: Mapped[str] = mapped_column(String(128), default="Threat Intelligence + Phishing Detector", nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="RECOMMENDED", index=True, nullable=False)
+    execution_mode: Mapped[str] = mapped_column(String(32), default="SIMULATION", nullable=False)
+    requested_by: Mapped[str] = mapped_column(String(128), default="SOC Detection Engine", nullable=False)
+    approved_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    result: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    result_message: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    case: Mapped[Case] = relationship("Case", back_populates="response_actions")
+
+
 

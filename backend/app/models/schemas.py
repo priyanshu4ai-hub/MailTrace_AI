@@ -385,5 +385,115 @@ class LedgerSummaryResponse(BaseModel):
     entries: list[LedgerEntryResponse] = Field(default_factory=list)
 
 
+# ── DFIR Report Schemas ──────────────────────────────────────
+
+class ReportCreate(BaseModel):
+    report_type: Literal["DFIR_FULL", "EXECUTIVE_SUMMARY"] = "DFIR_FULL"
+    title: str | None = Field(default=None, max_length=255)
+
+
+class ReportListItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    case_id: int
+    report_id: str
+    report_type: str
+    title: str
+    report_hash: str
+    ledger_status: str
+    generated_at: str
+    created_at: str
+
+
+class ReportResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    case_id: int
+    report_id: str
+    report_type: str
+    title: str
+    report_hash: str
+    ledger_status: str
+    generated_at: str
+    created_at: str
+    content: dict[str, Any] = Field(default_factory=dict)
+
+
+class ReportListResponse(BaseModel):
+    total_reports: int
+    reports: list[ReportListItem] = Field(default_factory=list)
+
+
+# ── Incident Response & SOC Automation Schemas ───────────────
+
+class ResponseActionCreate(BaseModel):
+    action_type: Literal[
+        "BLOCK_DOMAIN",
+        "BLOCK_IP",
+        "BLOCK_URL",
+        "SEARCH_MAILBOX",
+        "ISOLATE_ARTIFACT",
+        "FLAG_USER",
+        "RESET_CREDENTIAL_RECOMMENDATION",
+    ]
+    target: str = Field(min_length=1, max_length=512)
+    reason: str = Field(default="", max_length=2000)
+    severity: Literal["low", "medium", "high", "critical"] = "medium"
+    evidence: list[str] = Field(default_factory=list)
+    source: str = Field(default="SOC Analyst", max_length=128)
+
+
+class ResponseActionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    response_id: str
+    case_id: int
+    action_type: str
+    target: str
+    severity: str
+    reason: str
+    evidence: list[str] = Field(default_factory=list)
+    source: str
+    status: str
+    execution_mode: str
+    requested_by: str
+    approved_by: str | None = None
+    result: str | None = None
+    result_message: str
+    created_at: str
+    approved_at: str | None = None
+    executed_at: str | None = None
+
+
+class ResponseActionListResponse(BaseModel):
+    case_id: int
+    total_actions: int
+    recommended_count: int
+    pending_approval_count: int
+    approved_count: int
+    executed_count: int
+    rejected_count: int
+    actions: list[ResponseActionResponse] = Field(default_factory=list)
+
+
+class ResponseActionApproveRequest(BaseModel):
+    approved_by: str = Field(default="SOC Lead Analyst", max_length=128)
+    comments: str = Field(default="", max_length=1000)
+
+
+class ResponseActionRejectRequest(BaseModel):
+    rejected_by: str = Field(default="SOC Lead Analyst", max_length=128)
+    reason: str = Field(default="Action rejected by SOC analyst.", max_length=1000)
+
+
+class ResponseActionExecuteRequest(BaseModel):
+    executed_by: str = Field(default="SOC Automation Engine", max_length=128)
+
+
+
+
 
 
